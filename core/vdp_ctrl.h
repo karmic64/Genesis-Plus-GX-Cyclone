@@ -45,8 +45,9 @@
 /* VDP context */
 extern uint8 reg[0x20];
 extern uint8 sat[0x400];
-extern uint8 vram[0x10000];
+extern uint8 vram[0x20000];
 extern uint8 cram[0x80];
+extern uint8 cram_cyclone[0x800];
 extern uint8 vsram[0x80];
 extern uint8 hint_pending;
 extern uint8 vint_pending;

@@ -42,21 +42,29 @@
 #include "shared.h"
 #include "hvc.h"
 
-/* Mark a pattern as modified */
+/* Mark a pattern as modified */ /*** extended for 0x30-byte 6bpp tiles ***/
 #define MARK_BG_DIRTY(addr)                         \
 {                                                   \
-  name = (addr >> 5) & 0x7FF;                       \
-  if (bg_name_dirty[name] == 0)                     \
-  {                                                 \
-    bg_name_list[bg_list_index++] = name;           \
+  name = reg[0x18] & 0x80                           \
+         ? ((addr & 0x1ffff) / 0x30)                \
+         : ((addr & 0xffff) >> 5);                  \
+  if (name < 0x800) {                               \
+    if (bg_name_dirty[name] == 0)                     \
+    {                                                 \
+      bg_name_list[bg_list_index++] = name;           \
+    }                                                 \
+    int row = reg[0x18] & 0x80                        \
+              ? (((addr & 0x1ffff) / 6) & 7)          \
+              : (((addr & 0xffff) >> 5) & 7);         \
+    bg_name_dirty[name] |= (1 << row);                \
   }                                                 \
-  bg_name_dirty[name] |= (1 << ((addr >> 2) & 7));  \
 }
 
 /* VDP context */
 uint8 ALIGNED_(4) sat[0x400];    /* Internal copy of sprite attribute table */
-uint8 ALIGNED_(4) vram[0x10000]; /* Video RAM (64K x 8-bit) */
+uint8 ALIGNED_(4) vram[0x20000]; /* Video RAM (64K x 8-bit) */ /*** extended ***/
 uint8 ALIGNED_(4) cram[0x80];    /* On-chip color RAM (64 x 9-bit) */
+uint8 ALIGNED_(4) cram_cyclone[0x800];   /*** extra 8bpp cyclone cram ***/
 uint8 ALIGNED_(4) vsram[0x80];   /* On-chip vertical scroll RAM (40 x 11-bit) */
 uint8 reg[0x20];                 /* Internal VDP registers (23 x 8-bit) */
 uint8 hint_pending;              /* 0= Line interrupt is pending */
@@ -129,8 +137,8 @@ static uint8 border;          /* Border color index */
 static uint8 pending;         /* Pending write flag */
 static uint8 code;            /* Code register */
 static uint8 dma_type;        /* DMA mode */
-static uint16 addr;           /* Address register */
-static uint16 addr_latch;     /* Latched A15, A14 of address */
+static uint32 addr;           /* Address register */ /*** extended ***/
+static uint32 addr_latch;     /* Latched A15, A14 of address */ /*** also a16 ***/
 static uint16 sat_base_mask;  /* Base bits of SAT */
 static uint16 sat_addr_mask;  /* Index bits of SAT */
 static uint16 dma_src;        /* DMA source address */
@@ -142,6 +150,7 @@ static int fifo_idx;          /* FIFO write index */
 static int fifo_byte_access;  /* FIFO byte access flag */
 static uint32 fifo_cycles;    /* FIFO next access cycle */
 static int *fifo_timing;      /* FIFO slots timing table */
+static uint32 addr_mask;      /*** 0xffff for md, 0x1ffff for cyclone ***/
 
  /* set Z80 or 68k interrupt lines */
 static void (*set_irq_line)(unsigned int level);
@@ -270,6 +279,7 @@ void vdp_reset(void)
   fifo_idx        = 0;
   cached_write    = -1;
   fifo_byte_access = 1;
+  addr_mask   = 0xffff; /*** md mode default ***/
 
   ntab = 0;
   ntbb = 0;
@@ -443,6 +453,7 @@ int vdp_context_save(uint8 *state)
   save_param(sat, sizeof(sat));
   save_param(vram, sizeof(vram));
   save_param(cram, sizeof(cram));
+  save_param(cram_cyclone, sizeof(cram_cyclone));
   save_param(vsram, sizeof(vsram));
   save_param(reg, sizeof(reg));
   save_param(&addr, sizeof(addr));
@@ -471,6 +482,7 @@ int vdp_context_load(uint8 *state)
   load_param(sat, sizeof(sat));
   load_param(vram, sizeof(vram));
   load_param(cram, sizeof(cram));
+  load_param(cram_cyclone, sizeof(cram_cyclone));
   load_param(vsram, sizeof(vsram));
   load_param(temp_reg, sizeof(temp_reg));
 
@@ -729,8 +741,8 @@ void vdp_68k_ctrl_w(unsigned int data)
     /* Clear pending flag */
     pending = 0;
 
-    /* Save address bits A15 and A14 */
-    addr_latch = (data & 3) << 14;
+    /* Save address bits A15 and A14 */ /*** also A16 ***/
+    addr_latch = (data & 7) << 14;
 
     /* Update address and code registers */
     addr = addr_latch | (addr & 0x3FFF);
@@ -1464,6 +1476,40 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
 
   switch(r)
   {
+    case 0x18: /*** extra cyclone register ***/
+    {
+      r = d ^ reg[0x18];
+      reg[0x18] = d;
+      
+      if (r & 0x80) /*** extended graphics toggle ***/
+      {
+        if (d & 0x80)
+        {
+          /*** enable extra vram ***/
+          addr_mask = 0x1ffff;
+          sat_base_mask |= 0x10000;
+        }
+        else
+        {
+          /*** disable extra vram ***/
+          addr_mask = 0xffff;
+          sat_base_mask &= 0xffff;
+        }
+        
+        
+        /*** Invalidate pattern cache ***/
+        int i;
+        for (i=0;i<0x800;i++) 
+        {
+          bg_name_list[i] = i;
+          bg_name_dirty[i] = 0xFF;
+        }
+        bg_list_index = i;
+      }
+      
+      break;
+    }
+    
     case 0: /* CTRL #1 */
     {
       /* Look for changed bits */
@@ -2136,8 +2182,8 @@ static void vdp_bus_w(unsigned int data)
   {
     case 0x01:  /* VRAM */
     {
-      /* VRAM address */
-      int index = addr & 0xFFFE;
+      /* VRAM address */ /*** extended ***/
+      int index = addr & addr_mask & (~1);
 
       /* Pointer to VRAM */
       uint16 *p = (uint16 *)&vram[index];
@@ -2448,8 +2494,8 @@ static unsigned int vdp_68k_data_r_m5(void)
   {
     case 0x00:
     {
-      /* read two bytes from VRAM */
-      data = *(uint16 *)&vram[addr & 0xFFFE];
+      /* read two bytes from VRAM */ /*** extended ***/
+      data = *(uint16 *)&vram[addr & addr_mask & (~1)];
 
 #ifdef HOOK_CPU
       if (cpu_hook)
@@ -2515,8 +2561,8 @@ static unsigned int vdp_68k_data_r_m5(void)
 
     case 0x0c: /* undocumented 8-bit VRAM read */
     {
-      /* Read one byte from VRAM adjacent address */
-      data = READ_BYTE(vram, addr ^ 1);
+      /* Read one byte from VRAM adjacent address */ /*** extended ***/
+      data = READ_BYTE(vram, (addr & addr_mask) ^ 1);
 
       /* Unused bits are set using data from next available FIFO entry */
       data |= (fifo[fifo_idx] & ~0xFF);
@@ -2621,7 +2667,8 @@ static void vdp_z80_data_w_m5(unsigned int data)
     case 0x01:  /* VRAM */
     {
       /* VRAM address (write low byte to even address & high byte to odd address) */
-      int index = addr ^ 1;
+      /*** extended ***/
+      int index = (addr & addr_mask) ^ 1;
 
       /* Intercept writes to Sprite Attribute Table */
       if ((index & sat_base_mask) == satb)
@@ -2748,7 +2795,8 @@ static unsigned int vdp_z80_data_r_m5(void)
     case 0x00: /* VRAM */
     {
       /* Return low byte from even address & high byte from odd address */
-      data = READ_BYTE(vram, addr ^ 1);
+      /*** extended ***/
+      data = READ_BYTE(vram, (addr & addr_mask) ^ 1);
       break;
     }
 
@@ -3095,8 +3143,8 @@ static void vdp_dma_copy(unsigned int length)
     int name;
     uint8 data;
     
-    /* VRAM source address */
-    uint16 source = dma_src;
+    /* VRAM source address */ /*** extended ***/
+    uint32 source = (dma_src & addr_mask);
 
     do
     {
@@ -3110,11 +3158,11 @@ static void vdp_dma_copy(unsigned int length)
         WRITE_BYTE(sat, (addr & sat_addr_mask) ^ 1, data);
       }
 
-      /* Write byte to adjacent VRAM destination address */
-      WRITE_BYTE(vram, addr ^ 1, data);
+      /* Write byte to adjacent VRAM destination address */ /*** extended ***/
+      WRITE_BYTE(vram, (addr & addr_mask) ^ 1, data);
 
-      /* Update pattern cache */
-      MARK_BG_DIRTY(addr);
+      /* Update pattern cache */ /*** extended ***/
+      MARK_BG_DIRTY(addr & addr_mask);
 
       /* Increment VRAM source address */
       source++;
@@ -3151,11 +3199,11 @@ static void vdp_dma_fill(unsigned int length)
           WRITE_BYTE(sat, (addr & sat_addr_mask) ^ 1, data);
         }
 
-        /* Write byte to adjacent VRAM address */
-        WRITE_BYTE(vram, addr ^ 1, data);
+        /* Write byte to adjacent VRAM address */ /*** extended ***/
+        WRITE_BYTE(vram, (addr & addr_mask) ^ 1, data);
 
-        /* Update pattern cache */
-        MARK_BG_DIRTY (addr);
+        /* Update pattern cache */ /*** extended ***/
+        MARK_BG_DIRTY (addr & addr_mask);
 
         /* Increment VRAM address */
         addr += reg[15];
