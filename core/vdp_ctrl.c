@@ -255,6 +255,7 @@ void vdp_reset(void)
   memset ((char *) sat, 0, sizeof (sat));
   memset ((char *) vram, 0, sizeof (vram));
   memset ((char *) cram, 0, sizeof (cram));
+  memset ((char *) cram_cyclone, 0, sizeof (cram_cyclone));
   memset ((char *) vsram, 0, sizeof (vsram));
   memset ((char *) reg, 0, sizeof (reg));
 
@@ -2232,39 +2233,64 @@ static void vdp_bus_w(unsigned int data)
 
     case 0x03:  /* CRAM */
     {
-      /* Pointer to CRAM 9-bit word */
-      uint16 *p = (uint16 *)&cram[addr & 0x7E];
-
-      /* Pack 16-bit bus data (BBB0GGG0RRR0) to 9-bit CRAM data (BBBGGGRRR) */
-      data = ((data & 0xE00) >> 3) | ((data & 0x0E0) >> 2) | ((data & 0x00E) >> 1);
-
-      /* Check if CRAM data is being modified */
-      if (data != *p)
+      if (reg[0x18] & 0x80)
+      { /*** cyclone extended cram ***/
+        uint16 *p = (uint16 *)&cram_cyclone[addr & 0x7fe];
+        
+        if (data != *p)
+        {
+          /*** 64 * 8 longs ***/
+          int index = (addr >> 2) & 0x1ff;
+          *p = data;
+          
+          
+          /*** todo: actual color update ***/
+          
+          
+          /*** CRAM modified during HBLANK (Striker, Zero the Kamikaze, etc) ***/
+          if ((v_counter < bitmap.viewport.h) && (reg[1] & 0x40) && (m68k.cycles <= (mcycles_vdp + 860)))
+          {
+            /*** Remap current line ***/
+            remap_line(v_counter);
+          }
+        }
+      }
+      else
       {
-        /* CRAM index (64 words) */
-        int index = (addr >> 1) & 0x3F;
+        /* Pointer to CRAM 9-bit word */
+        uint16 *p = (uint16 *)&cram[addr & 0x7E];
 
-        /* Write CRAM data */
-        *p = data;
+        /* Pack 16-bit bus data (BBB0GGG0RRR0) to 9-bit CRAM data (BBBGGGRRR) */
+        data = ((data & 0xE00) >> 3) | ((data & 0x0E0) >> 2) | ((data & 0x00E) >> 1);
 
-        /* Color entry 0 of each palette is never displayed (transparent pixel) */
-        if (index & 0x0F)
+        /* Check if CRAM data is being modified */
+        if (data != *p)
         {
-          /* Update color palette */
-          color_update_m5(index, data);
-        }
+          /* CRAM index (64 words) */
+          int index = (addr >> 1) & 0x3F;
 
-        /* Update backdrop color */
-        if (index == border)
-        {
-          color_update_m5(0x00, data);
-        }
+          /* Write CRAM data */
+          *p = data;
 
-        /* CRAM modified during HBLANK (Striker, Zero the Kamikaze, etc) */
-        if ((v_counter < bitmap.viewport.h) && (reg[1] & 0x40) && (m68k.cycles <= (mcycles_vdp + 860)))
-        {
-          /* Remap current line */
-          remap_line(v_counter);
+          /* Color entry 0 of each palette is never displayed (transparent pixel) */
+          if (index & 0x0F)
+          {
+            /* Update color palette */
+            color_update_m5(index, data);
+          }
+
+          /* Update backdrop color */
+          if (index == border)
+          {
+            color_update_m5(0x00, data);
+          }
+
+          /* CRAM modified during HBLANK (Striker, Zero the Kamikaze, etc) */
+          if ((v_counter < bitmap.viewport.h) && (reg[1] & 0x40) && (m68k.cycles <= (mcycles_vdp + 860)))
+          {
+            /* Remap current line */
+            remap_line(v_counter);
+          }
         }
       }
 
@@ -2547,14 +2573,21 @@ static unsigned int vdp_68k_data_r_m5(void)
 
     case 0x08:
     {
-      /* Read 9-bit word from CRAM */
-      data = *(uint16 *)&cram[addr & 0x7E];
+      if (reg[0x18] & 0x80)
+      { /*** cyclone extended CRAM ***/
+        data = *(uint16 *)&cram_cyclone[addr & 0x7fe];
+      }
+      else
+      {
+        /* Read 9-bit word from CRAM */
+        data = *(uint16 *)&cram[addr & 0x7E];
 
-      /* Unpack 9-bit CRAM data (BBBGGGRRR) to 16-bit bus data (BBB0GGG0RRR0) */
-      data = ((data & 0x1C0) << 3) | ((data & 0x038) << 2) | ((data & 0x007) << 1);
+        /* Unpack 9-bit CRAM data (BBBGGGRRR) to 16-bit bus data (BBB0GGG0RRR0) */
+        data = ((data & 0x1C0) << 3) | ((data & 0x038) << 2) | ((data & 0x007) << 1);
 
-      /* Unused bits are set using data from next available FIFO entry */
-      data |= (fifo[fifo_idx] & ~0xEEE);
+        /* Unused bits are set using data from next available FIFO entry */
+        data |= (fifo[fifo_idx] & ~0xEEE);
+      }
 
 #ifdef HOOK_CPU
       if (cpu_hook)
@@ -3227,41 +3260,65 @@ static void vdp_dma_fill(unsigned int length)
       /* Get source data from next available FIFO entry */
       uint16 data = fifo[fifo_idx];
 
-      /* Pack 16-bit bus data (BBB0GGG0RRR0) to 9-bit CRAM data (BBBGGGRRR) */
-      data = ((data & 0xE00) >> 3) | ((data & 0x0E0) >> 2) | ((data & 0x00E) >> 1);
-
-      do
-      {
-        /* Pointer to CRAM 9-bit word */
-        uint16 *p = (uint16 *)&cram[addr & 0x7E];
-
-        /* Check if CRAM data is being modified */
-        if (data != *p)
+      if (reg[0x18] & 0x80)
+      { /*** cyclone extended CRAM ***/
+        do
         {
-          /* CRAM index (64 words) */
-          int index = (addr >> 1) & 0x3F;
-
-          /* Write CRAM data */
-          *p = data;
-
-          /* Color entry 0 of each palette is never displayed (transparent pixel) */
-          if (index & 0x0F)
-          {
-            /* Update color palette */
-            color_update_m5(index, data);
-          }
-
-          /* Update backdrop color */
-          if (index == border)
-          {
-            color_update_m5(0x00, data);
-          }
-        }
+          uint16 *p = (uint16 *)&cram_cyclone[addr & 0x7fe];
           
-        /* Increment CRAM address */
-        addr += reg[15];
+          if (data != *p)
+          {
+            int index = (addr >> 2) & 0x1ff;
+            
+            *p = data;
+            
+            
+            /*** todo actual color write ***/
+            
+              
+            /*** Increment CRAM address ***/
+            addr += reg[15];
+          }
+        } while (--length);
       }
-      while (--length);
+      else
+      {
+        /* Pack 16-bit bus data (BBB0GGG0RRR0) to 9-bit CRAM data (BBBGGGRRR) */
+        data = ((data & 0xE00) >> 3) | ((data & 0x0E0) >> 2) | ((data & 0x00E) >> 1);
+        
+        do
+        {
+          /* Pointer to CRAM 9-bit word */
+          uint16 *p = (uint16 *)&cram[addr & 0x7E];
+
+          /* Check if CRAM data is being modified */
+          if (data != *p)
+          {
+            /* CRAM index (64 words) */
+            int index = (addr >> 1) & 0x3F;
+
+            /* Write CRAM data */
+            *p = data;
+
+            /* Color entry 0 of each palette is never displayed (transparent pixel) */
+            if (index & 0x0F)
+            {
+              /* Update color palette */
+              color_update_m5(index, data);
+            }
+
+            /* Update backdrop color */
+            if (index == border)
+            {
+              color_update_m5(0x00, data);
+            }
+          }
+            
+          /* Increment CRAM address */
+          addr += reg[15];
+        }
+        while (--length);
+      }
       break;
     }
 
