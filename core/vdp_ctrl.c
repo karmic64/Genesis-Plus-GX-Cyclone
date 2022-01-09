@@ -786,6 +786,8 @@ void vdp_68k_ctrl_w(unsigned int data)
             {
               dma_length = 0x10000;
             }
+            /*** in cyclone mode dma is measured in longs ***/
+            if (reg[0x18] & 0x80) dma_length <<= 1;
 
             /* DMA source address */
             dma_src = (reg[22] << 8) | reg[21];
@@ -808,6 +810,8 @@ void vdp_68k_ctrl_w(unsigned int data)
             {
               dma_length = 0x10000;
             }
+            /*** in cyclone mode dma is measured in longs ***/
+            if (reg[0x18] & 0x80) dma_length <<= 1;
 
             /* DMA source address */
             dma_src = (reg[22] << 8) | reg[21];
@@ -950,6 +954,8 @@ void vdp_z80_ctrl_w(unsigned int data)
               {
                 dma_length = 0x10000;
               }
+              /*** in cyclone mode dma is measured in longs ***/
+              if (reg[0x18] & 0x80) dma_length <<= 1;
 
               /* DMA source address */
               dma_src = (reg[22] << 8) | reg[21];
@@ -2461,6 +2467,8 @@ static void vdp_68k_data_w_m5(unsigned int data)
     {
       dma_length = 0x10000;
     }
+    /*** in cyclone mode dma is measured in longs ***/
+    if (reg[0x18] & 0x80) dma_length <<= 1;
 
     /* Trigger DMA */
     vdp_dma_update(m68k.cycles);
@@ -2758,6 +2766,8 @@ static void vdp_z80_data_w_m5(unsigned int data)
     {
       dma_length = 0x10000;
     }
+    /*** in cyclone mode dma is measured in longs ***/
+    if (reg[0x18] & 0x80) dma_length <<= 1;
 
     /* Trigger DMA */
     vdp_dma_update(Z80.cycles);
