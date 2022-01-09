@@ -55,11 +55,11 @@ extern uint16 status;
 extern uint32 dma_length;
 
 /* Global variables */
-extern uint16 ntab;
-extern uint16 ntbb;
-extern uint16 ntwb;
-extern uint16 satb;
-extern uint16 hscb;
+extern uint32 ntab;
+extern uint32 ntbb;
+extern uint32 ntwb;
+extern uint32 satb;
+extern uint32 hscb;
 extern uint8 bg_name_dirty[0x800];
 extern uint16 bg_name_list[0x800];
 extern uint16 bg_list_index;

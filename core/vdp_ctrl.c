@@ -42,10 +42,12 @@
 #include "shared.h"
 #include "hvc.h"
 
+#define CYCLONE_ENABLED ((reg[0x18] & 0x80) && (reg[1] & 4))
+
 /* Mark a pattern as modified */ /*** extended for 0x30-byte 6bpp tiles ***/
 #define MARK_BG_DIRTY(addr)                         \
 {                                                   \
-  name = reg[0x18] & 0x80                           \
+  name = CYCLONE_ENABLED                            \
          ? ((addr & 0x1ffff) / 0x30)                \
          : ((addr & 0xffff) >> 5);                  \
   if (name < 0x800) {                               \
@@ -53,7 +55,7 @@
     {                                                 \
       bg_name_list[bg_list_index++] = name;           \
     }                                                 \
-    int row = reg[0x18] & 0x80                        \
+    int row = CYCLONE_ENABLED                         \
               ? (((addr & 0x1ffff) / 6) & 7)          \
               : (((addr & 0xffff) >> 2) & 7);         \
     bg_name_dirty[name] |= (1 << row);                \
@@ -73,11 +75,12 @@ uint16 status;                   /* VDP status flags */
 uint32 dma_length;               /* DMA remaining length */
 
 /* Global variables */
-uint16 ntab;                      /* Name table A base address */
-uint16 ntbb;                      /* Name table B base address */
-uint16 ntwb;                      /* Name table W base address */
-uint16 satb;                      /* Sprite attribute table base address */
-uint16 hscb;                      /* Horizontal scroll table base address */
+/*** base addresses are extended ***/
+uint32 ntab;                      /* Name table A base address */
+uint32 ntbb;                      /* Name table B base address */
+uint32 ntwb;                      /* Name table W base address */
+uint32 satb;                      /* Sprite attribute table base address */
+uint32 hscb;                      /* Horizontal scroll table base address */
 uint8 bg_name_dirty[0x800];       /* 1= This pattern is dirty */
 uint16 bg_name_list[0x800];       /* List of modified pattern indices */
 uint16 bg_list_index;             /* # of modified patterns in list */
@@ -788,7 +791,7 @@ void vdp_68k_ctrl_w(unsigned int data)
               dma_length = 0x10000;
             }
             /*** in cyclone mode dma is measured in longs ***/
-            if (reg[0x18] & 0x80) dma_length <<= 1;
+            if (CYCLONE_ENABLED) dma_length <<= 1;
 
             /* DMA source address */
             dma_src = (reg[22] << 8) | reg[21];
@@ -812,7 +815,7 @@ void vdp_68k_ctrl_w(unsigned int data)
               dma_length = 0x10000;
             }
             /*** in cyclone mode dma is measured in longs ***/
-            if (reg[0x18] & 0x80) dma_length <<= 1;
+            if (CYCLONE_ENABLED) dma_length <<= 1;
 
             /* DMA source address */
             dma_src = (reg[22] << 8) | reg[21];
@@ -956,7 +959,7 @@ void vdp_z80_ctrl_w(unsigned int data)
                 dma_length = 0x10000;
               }
               /*** in cyclone mode dma is measured in longs ***/
-              if (reg[0x18] & 0x80) dma_length <<= 1;
+              if (CYCLONE_ENABLED) dma_length <<= 1;
 
               /* DMA source address */
               dma_src = (reg[22] << 8) | reg[21];
@@ -1501,6 +1504,11 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
           /*** disable extra vram ***/
           addr_mask = 0xffff;
           sat_base_mask &= 0xffff;
+          
+          ntab &= 0xffff;
+          ntbb &= 0xffff;
+          ntwb &= 0xffff;
+          hscb &= 0xffff;
         }
         
         
@@ -1827,7 +1835,10 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
     case 2: /* Plane A Name Table Base */
     {
       reg[2] = d;
-      ntab = (d << 10) & 0xE000;
+      /*** extended ***/
+      ntab = (d << 10) & 0x1E000;
+      if (!CYCLONE_ENABLED) ntab &= 0xffff;
+      else if (ntab >= 0xc000) ntab += (0x12000-0xc000);
 
       /* Plane A Name Table Base changed during HBLANK */
       if ((v_counter < bitmap.viewport.h) && (reg[1] & 0x40) && (cycles <= (mcycles_vdp + 860)))
@@ -1841,14 +1852,17 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
     case 3: /* Window Plane Name Table Base */
     {
       reg[3] = d;
+      /*** extended ***/
       if (reg[12] & 0x01)
       {
-        ntwb = (d << 10) & 0xF000;
+        ntwb = (d << 10) & 0x1F000;
       }
       else
       {
-        ntwb = (d << 10) & 0xF800;
+        ntwb = (d << 10) & 0x1F800;
       }
+      if (!CYCLONE_ENABLED) ntwb &= 0xffff;
+      else if (ntwb >= 0xc000) ntwb += (0x12000-0xc000);
 
       /* Window Plane Name Table Base changed during HBLANK */
       if ((v_counter < bitmap.viewport.h) && (reg[1] & 0x40) && (cycles <= (mcycles_vdp + 860)))
@@ -1862,7 +1876,10 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
     case 4: /* Plane B Name Table Base */
     {
       reg[4] = d;
-      ntbb = (d << 13) & 0xE000;
+      /*** extended ***/
+      ntbb = (d << 13) & 0x1E000;
+      if (!CYCLONE_ENABLED) ntbb &= 0xffff;
+      else if (ntbb >= 0xc000) ntbb += (0x12000-0xc000);
 
       /* Plane B Name Table Base changed during HBLANK (Adventures of Batman & Robin) */
       if ((v_counter < bitmap.viewport.h) && (reg[1] & 0x40) && (cycles <= (mcycles_vdp + 860)))
@@ -1878,6 +1895,7 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
     {
       reg[5] = d;
       satb = (d << 9) & sat_base_mask;
+      if (CYCLONE_ENABLED && satb >= 0xc000) satb += (0x12000-0xc000);
       break;
     }
 
@@ -2012,10 +2030,14 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         if (d & 0x01)
         {
           /* Update display-dependant registers */
-          ntwb = (reg[3] << 10) & 0xF000;
-          satb = (reg[5] << 9) & 0xFC00;
-          sat_base_mask = 0xFC00;
+          ntwb = (reg[3] << 10) & 0x1F000; /*** extended ***/
+          satb = (reg[5] << 9) & 0x1FC00;
+          sat_base_mask = CYCLONE_ENABLED ? 0x1fc00 : 0xFC00;
           sat_addr_mask = 0x03FF;
+          if (!CYCLONE_ENABLED) ntwb &= 0xffff;
+          else if (ntwb >= 0xc000) ntwb += (0x12000-0xc000);
+          if (!CYCLONE_ENABLED) satb &= 0xffff;
+          else if (satb >= 0xc000) satb += (0x12000-0xc000);
 
           /* Update HC table */
           hctab = cycle2hc40;
@@ -2032,10 +2054,14 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         else
         {
           /* Update display-dependant registers */
-          ntwb = (reg[3] << 10) & 0xF800;
-          satb = (reg[5] << 9) & 0xFE00;
-          sat_base_mask = 0xFE00;
+          ntwb = (reg[3] << 10) & 0x1F800; /*** extended ***/
+          satb = (reg[5] << 9) & 0x1FE00;
+          sat_base_mask = CYCLONE_ENABLED ? 0x1fe00 : 0xFE00;
           sat_addr_mask = 0x01FF;
+          if (!CYCLONE_ENABLED) ntwb &= 0xffff;
+          else if (ntwb >= 0xc000) ntwb += (0x12000-0xc000);
+          if (!CYCLONE_ENABLED) satb &= 0xffff;
+          else if (satb >= 0xc000) satb += (0x12000-0xc000);
 
           /* Update HC table */
           hctab = cycle2hc32;
@@ -2083,7 +2109,9 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
     case 13: /* HScroll Base Address */
     {
       reg[13] = d;
-      hscb = (d << 10) & 0xFC00;
+      hscb = (d << 10) & 0x1FC00;
+      if (!CYCLONE_ENABLED) hscb &= 0xffff;
+      else if (hscb >= 0xc000) hscb += (0x12000-0xc000);
       break;
     }
 
@@ -2233,7 +2261,7 @@ static void vdp_bus_w(unsigned int data)
 
     case 0x03:  /* CRAM */
     {
-      if (reg[0x18] & 0x80)
+      if (CYCLONE_ENABLED)
       { /*** cyclone extended cram ***/
         uint16 *p = (uint16 *)&cram_cyclone[addr & 0x7fe];
         
@@ -2494,7 +2522,7 @@ static void vdp_68k_data_w_m5(unsigned int data)
       dma_length = 0x10000;
     }
     /*** in cyclone mode dma is measured in longs ***/
-    if (reg[0x18] & 0x80) dma_length <<= 1;
+    if (CYCLONE_ENABLED) dma_length <<= 1;
 
     /* Trigger DMA */
     vdp_dma_update(m68k.cycles);
@@ -2573,7 +2601,7 @@ static unsigned int vdp_68k_data_r_m5(void)
 
     case 0x08:
     {
-      if (reg[0x18] & 0x80)
+      if (CYCLONE_ENABLED)
       { /*** cyclone extended CRAM ***/
         data = *(uint16 *)&cram_cyclone[addr & 0x7fe];
       }
@@ -2800,7 +2828,7 @@ static void vdp_z80_data_w_m5(unsigned int data)
       dma_length = 0x10000;
     }
     /*** in cyclone mode dma is measured in longs ***/
-    if (reg[0x18] & 0x80) dma_length <<= 1;
+    if (CYCLONE_ENABLED) dma_length <<= 1;
 
     /* Trigger DMA */
     vdp_dma_update(Z80.cycles);
@@ -3260,7 +3288,7 @@ static void vdp_dma_fill(unsigned int length)
       /* Get source data from next available FIFO entry */
       uint16 data = fifo[fifo_idx];
 
-      if (reg[0x18] & 0x80)
+      if (CYCLONE_ENABLED)
       { /*** cyclone extended CRAM ***/
         do
         {
