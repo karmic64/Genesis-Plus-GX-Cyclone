@@ -55,7 +55,7 @@
     }                                                 \
     int row = reg[0x18] & 0x80                        \
               ? (((addr & 0x1ffff) / 6) & 7)          \
-              : (((addr & 0xffff) >> 5) & 7);         \
+              : (((addr & 0xffff) >> 2) & 7);         \
     bg_name_dirty[name] |= (1 << row);                \
   }                                                 \
 }
