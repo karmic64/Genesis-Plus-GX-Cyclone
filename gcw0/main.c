@@ -1057,7 +1057,7 @@ static int gcw0menu(void)
         destination.y = 40;
         destination.w = 100;
         destination.h = 50;
-        textSurface = TTF_RenderText_Solid(ttffont, "Genesis Plus GX", text_color);
+        textSurface = TTF_RenderText_Solid(ttffont, "Genesis Plus GX-Cyclone", text_color);
         SDL_BlitSurface(textSurface, NULL, menuSurface, &destination);
         SDL_FreeSurface(textSurface);
         TTF_CloseFont (ttffont);
@@ -1202,7 +1202,7 @@ static int gcw0menu(void)
             destination.y = 40;
             destination.w = 100;
             destination.h = 50;
-            textSurface = TTF_RenderText_Solid(ttffont, "Genesis Plus GX", text_color);
+            textSurface = TTF_RenderText_Solid(ttffont, "Genesis Plus GX-Cyclone", text_color);
             SDL_BlitSurface(textSurface, NULL, menuSurface, &destination);
             SDL_FreeSurface(textSurface);
             TTF_CloseFont (ttffont);
@@ -1261,7 +1261,7 @@ static int gcw0menu(void)
             destination.y = 40;
             destination.w = 100;
             destination.h = 50;
-            textSurface = TTF_RenderText_Solid(ttffont, "Genesis Plus GX", text_color);
+            textSurface = TTF_RenderText_Solid(ttffont, "Genesis Plus GX-Cyclone", text_color);
             SDL_BlitSurface(textSurface, NULL, menuSurface, &destination);
             SDL_FreeSurface(textSurface);
             TTF_CloseFont (ttffont);
@@ -2340,7 +2340,7 @@ int main (int argc, char **argv)
     if(argc < 2)
     {
         char caption[256];
-        sprintf(caption, "Genesis Plus GX\\SDL\nusage: %s gamename\n", argv[0]);
+        sprintf(caption, "Genesis Plus GX-Cyclone\\SDL\nusage: %s gamename\n", argv[0]);
         MessageBox(NULL, caption, "Information", 0);
         exit(1);
     }
@@ -2518,7 +2518,7 @@ int main (int argc, char **argv)
                 case SDL_USEREVENT:
                 {
                     char caption[100];
-                    sprintf(caption,"Genesis Plus GX - %d fps - %s)", event.user.code, (rominfo.international[0] != 0x20) ? rominfo.international : rominfo.domestic);
+                    sprintf(caption,"Genesis Plus GX-Cyclone - %d fps - %s)", event.user.code, (rominfo.international[0] != 0x20) ? rominfo.international : rominfo.domestic);
                     SDL_WM_SetCaption(caption, NULL);
                     break;
                 }

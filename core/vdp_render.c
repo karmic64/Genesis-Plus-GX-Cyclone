@@ -471,13 +471,16 @@ INLINE void WRITE_LONG(void *address, uint32 data)
 
 
 /* Pixels conversion macro */
+/*** source color channels are now 8-bit ***/
 /* 4-bit color channels are either compressed to 2/3-bit or dithered to 5/6/8-bit equivalents */
 /* 3:3:2 RGB */
 #if defined(USE_8BPP_RENDERING)
+#error "8bpp rendering not supported"
 #define MAKE_PIXEL(r,g,b)  (((r) >> 1) << 5 | ((g) >> 1) << 2 | (b) >> 2)
 
 /* 5:5:5 RGB */
 #elif defined(USE_15BPP_RENDERING)
+#error "15bpp rendering not supported"
 #if defined(USE_ABGR)
 #define MAKE_PIXEL(r,g,b) ((1 << 15) | (b) << 11 | ((b) >> 3) << 10 | (g) << 6 | ((g) >> 3) << 5 | (r) << 1 | (r) >> 3)
 #else
@@ -485,11 +488,15 @@ INLINE void WRITE_LONG(void *address, uint32 data)
 #endif
 /* 5:6:5 RGB */
 #elif defined(USE_16BPP_RENDERING)
+#error "16bpp rendering not supported"
 #define MAKE_PIXEL(r,g,b) ((r) << 12 | ((r) >> 3) << 11 | (g) << 7 | ((g) >> 2) << 5 | (b) << 1 | (b) >> 3)
 
 /* 8:8:8 RGB */
 #elif defined(USE_32BPP_RENDERING)
-#define MAKE_PIXEL(r,g,b) ((0xff << 24) | (r) << 20 | (r) << 16 | (g) << 12 | (g)  << 8 | (b) << 4 | (b))
+/*** for old 4:4:4 source data ***/
+#define MAKE_PIXEL(r,g,b) ((0xff<<24) | (r)<<20|(r)<<16 | (g)<<12|(g)<<8 | (b)<<4|(b)<<0)
+/*** for 8:8:8 source data ***/
+#define MAKE_PIXEL_CYCLONE(r,g,b) ((0xff << 24) | (r) << 16 | (g) << 8 | (b))
 #endif
 
 /* Window & Plane A clipping */

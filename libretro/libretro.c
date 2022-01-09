@@ -138,7 +138,7 @@ static uint8_t brm_format[0x40] =
 static bool is_running = 0;
 static uint8_t temp[0x10000];
 static int16 soundbuffer[3068];
-static uint16_t bitmap_data_[720 * 576];
+static uint32_t bitmap_data_[720 * 576]; /*** uint32 for rgb888 ***/
 
 static bool restart_eq = false;
 
@@ -898,7 +898,7 @@ static void init_bitmap(void)
    memset(&bitmap, 0, sizeof(bitmap));
    bitmap.width      = 720;
    bitmap.height     = 576;
-   bitmap.pitch      = 720 * 2;
+   bitmap.pitch      = 720 * 2; /*** for rgb888 ***/
    bitmap.data       = (uint8_t *)bitmap_data_;
 }
 
@@ -3064,6 +3064,7 @@ bool retro_load_game(const struct retro_game_info *info)
       }
    }
 
+  /*** we NEED rgb888
 #ifdef FRONTEND_SUPPORTS_RGB565
    {
       unsigned rgb565 = RETRO_PIXEL_FORMAT_RGB565;
@@ -3072,6 +3073,13 @@ bool retro_load_game(const struct retro_game_info *info)
             log_cb(RETRO_LOG_INFO, "Frontend supports RGB565 - will use that instead of XRGB1555.\n");
    }
 #endif
+  ***/
+  {
+    unsigned rgb888 = RETRO_PIXEL_FORMAT_XRGB8888;
+    if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &rgb888))
+      if (log_cb)
+        log_cb(RETRO_LOG_ERROR, "Frontend does not support XRGB8888.\n");
+  }
 
    sms_ntsc = calloc(1, sizeof(sms_ntsc_t));
    md_ntsc  = calloc(1, sizeof(md_ntsc_t));
