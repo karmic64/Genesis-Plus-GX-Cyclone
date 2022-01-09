@@ -2734,7 +2734,7 @@ void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; }
 
 void retro_get_system_info(struct retro_system_info *info)
 {
-   info->library_name = "Genesis Plus GX";
+   info->library_name = "Genesis Plus GX-Cyclone";
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
 #endif

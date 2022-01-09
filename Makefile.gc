@@ -15,7 +15,7 @@ include $(DEVKITPPC)/gamecube_rules
 # SOURCES is a list of directories containing source code
 # INCLUDES is a list of directories containing extra header files
 #---------------------------------------------------------------------------------
-TARGET		:=	genplus_cube
+TARGET		:=	genplus_cyclone_cube
 BUILD		:=	build_cube
 SOURCES		:=	core core/m68k core/z80 core/sound core/tremor core/ntsc core/input_hw core/cd_hw core/cart_hw core/cart_hw/svp \
 			gx gx/utils gx/gui gx/fileio gx/images gx/sounds

@@ -1,3 +1,11 @@
+# Genesis-Plus-GX-Cyclone
+
+This is a modification of Genesis Plus GX which can play enhanced Sega Genesis Flashback games. For more info, see [the dedicated page](https://karmic128.neocities.org/sgflashback/).
+
+My own comments will be denoted in `/*** ***/` comment blocks.
+
+# Original readme
+
 Genesis Plus GX is an open-source Sega 8/16 bit emulator focused on accuracy and portability. Initially ported and developped on Gamecube / Wii consoles through [libogc / devkitPPC](http://sourceforge.net/projects/devkitpro/), this emulator is now available on many other platforms through various frontends such as:
 
 * [Retroarch (libretro)](http://www.libretro.com)
