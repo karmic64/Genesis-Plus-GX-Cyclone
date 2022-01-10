@@ -4,6 +4,19 @@ This is a modification of Genesis Plus GX which can play enhanced Sega Genesis F
 
 My own comments will be denoted in `/*** ***/` comment blocks.
 
+## Known issues/unknowns
+
+The following issues exist due to lack of testing:
+* The Z80->VDP write handler is completely unmodified, so writes will always go to standard CRAM.
+* I assume that nametable priority has no effect in bitmap mode, and that sprites always go in front of the bitmap. This may not be true.
+* Not sure how bitmap mode works in 32-column mode. Currently the rightmost 8 columns are just cut off, but it may "reinterpret" the bitmap data so that each row is only 256 bytes long.
+* I assume that bitmap mode requires both bits 7 and 6 in register $18 to be activated. It might just need bit 6.
+* Not sure what happens when cyclone mode is turned off when a VDP address is >$10000. Currently I just AND the current address with $ffff.
+* Not sure if cyclone mode requires the M5 bit to be set in register #1. Currently it does.
+* Not sure how shadow/highlight works in cyclone mode. Currently it has no effect.
+* Not sure what happens when cyclone mode is turned off then back on again when the background color register is >$40. Currently the value will just be masked with $3f by turning it off.
+"I know how it works but just haven't implemented it yet" things are not listed here.
+
 # Original readme
 
 Genesis Plus GX is an open-source Sega 8/16 bit emulator focused on accuracy and portability. Initially ported and developped on Gamecube / Wii consoles through [libogc / devkitPPC](http://sourceforge.net/projects/devkitpro/), this emulator is now available on many other platforms through various frontends such as:
