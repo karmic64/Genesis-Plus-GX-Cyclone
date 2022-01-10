@@ -3279,12 +3279,200 @@ void render_bg_cyclone(int line)
 }
 
 
-/*** todo all these ***/
+
 void render_bg_cyclone_vs(int line)
 {
-  render_bg_cyclone(line);
+  int column;
+  uint32 atex, atbuf, *dst;
+  uint32 v_line, *nt;
+  uint8 *src;
+
+  /* Common data */
+  uint32 xscroll      = *(uint32 *)&vram[hscb + ((line & hscroll_mask) << 2)];
+  uint32 yscroll      = 0;
+  uint32 pf_col_mask  = playfield_col_mask;
+  uint32 pf_row_mask  = playfield_row_mask;
+  uint32 pf_shift     = playfield_shift;
+  uint32 *vs          = (uint32 *)&vsram[0];
+
+  /* Window & Plane A */
+  int a = (reg[18] & 0x1F) << 3;
+  int w = (reg[18] >> 7) & 1;
+
+  /* Plane B width */
+  int start = 0;
+  int end = bitmap.viewport.w >> 4;
+
+  /* Plane B horizontal scroll */
+#ifdef LSB_FIRST
+  uint32 shift  = (xscroll >> 16) & 0x0F;
+  uint32 index  = pf_col_mask + 1 - ((xscroll >> 20) & pf_col_mask);
+#else
+  uint32 shift  = (xscroll & 0x0F);
+  uint32 index  = pf_col_mask + 1 - ((xscroll >> 4) & pf_col_mask);
+#endif
+
+  /* Left-most column vertical scrolling when partially shown horizontally (verified on PAL MD2)  */
+  /* TODO: check on Genesis 3 models since it apparently behaves differently  */
+  /* In H32 mode, vertical scrolling is disabled, in H40 mode, same value is used for both planes */
+  /* See Formula One / Kawasaki Superbike Challenge (H32) & Gynoug / Cutie Suzuki no Ringside Angel (H40) */
+  if (reg[12] & 1)
+  {
+    yscroll = vs[19] & (vs[19] >> 16);
+  }
+
+  if(shift)
+  {
+    /* Plane B vertical scroll */
+    v_line = (line + yscroll) & pf_row_mask;
+
+    /* Plane B name table */
+    nt = (uint32 *)&vram[ntbb + (((v_line >> 3) << pf_shift) & 0x1FC0)];
+
+    /* Pattern row index */
+    v_line = (v_line & 7) << 3;
+
+    /* Plane B line buffer */
+    dst = (uint32 *)&linebuf_cyclone[0][0x10 + shift];
+
+    atbuf = nt[(index - 1) & pf_col_mask];
+    DRAW_COLUMN_CYCLONE(atbuf, v_line, bpalbase)
+  }
+  else
+  {
+    /* Plane B line buffer */
+    dst = (uint32 *)&linebuf_cyclone[0][0x20];
+  }
+
+  for(column = 0; column < end; column++, index++)
+  {
+    /* Plane B vertical scroll */
+#ifdef LSB_FIRST
+    v_line = (line + (vs[column] >> 16)) & pf_row_mask;
+#else
+    v_line = (line + vs[column]) & pf_row_mask;
+#endif
+
+    /* Plane B name table */
+    nt = (uint32 *)&vram[ntbb + (((v_line >> 3) << pf_shift) & 0x1FC0)];
+
+    /* Pattern row index */
+    v_line = (v_line & 7) << 3;
+
+    atbuf = nt[index & pf_col_mask];
+    DRAW_COLUMN_CYCLONE(atbuf, v_line, bpalbase)
+  }
+
+  if (w == (line >= a))
+  {
+    /* Window takes up entire line */
+    a = 0;
+    w = 1;
+  }
+  else
+  {
+    /* Window and Plane A share the line */
+    a = clip[0].enable;
+    w = clip[1].enable;
+  }
+
+  /* Plane A */
+  if (a)
+  {
+    /* Plane A width */
+    start = clip[0].left;
+    end   = clip[0].right;
+
+    /* Plane A horizontal scroll */
+#ifdef LSB_FIRST
+    shift = (xscroll & 0x0F);
+    index = pf_col_mask + start + 1 - ((xscroll >> 4) & pf_col_mask);
+#else
+    shift = (xscroll >> 16) & 0x0F;
+    index = pf_col_mask + start + 1 - ((xscroll >> 20) & pf_col_mask);
+#endif
+
+    if(shift)
+    {
+      /* Plane A vertical scroll */
+      v_line = (line + yscroll) & pf_row_mask;
+
+      /* Plane A name table */
+      nt = (uint32 *)&vram[ntab + (((v_line >> 3) << pf_shift) & 0x1FC0)];
+
+      /* Pattern row index */
+      v_line = (v_line & 7) << 3;
+
+      /* Plane A line buffer */
+      dst = (uint32 *)&linebuf_cyclone[1][0x10 + shift + (start << 4)];
+
+      /* Window bug */
+      if (start)
+      {
+        atbuf = nt[index & pf_col_mask];
+      }
+      else
+      {
+        atbuf = nt[(index - 1) & pf_col_mask];
+      }
+
+      DRAW_COLUMN_CYCLONE(atbuf, v_line, apalbase)
+    }
+    else
+    {
+      /* Plane A line buffer */
+      dst = (uint32 *)&linebuf_cyclone[1][0x20 + (start << 4)];
+    }
+
+    for(column = start; column < end; column++, index++)
+    {
+      /* Plane A vertical scroll */
+#ifdef LSB_FIRST
+      v_line = (line + vs[column]) & pf_row_mask;
+#else
+      v_line = (line + (vs[column] >> 16)) & pf_row_mask;
+#endif
+
+      /* Plane A name table */
+      nt = (uint32 *)&vram[ntab + (((v_line >> 3) << pf_shift) & 0x1FC0)];
+
+      /* Pattern row index */
+      v_line = (v_line & 7) << 3;
+
+      atbuf = nt[index & pf_col_mask];
+      DRAW_COLUMN_CYCLONE(atbuf, v_line, apalbase)
+    }
+
+    /* Window width */
+    start = clip[1].left;
+    end   = clip[1].right;
+  }
+
+  /* Window */
+  if (w)
+  {
+    /* Window name table */
+    nt = (uint32 *)&vram[ntwb | ((line >> 3) << (6 + (reg[12] & 1)))];
+
+    /* Pattern row index */
+    v_line = (line & 7) << 3;
+
+    /* Plane A line buffer */
+    dst = (uint32 *)&linebuf_cyclone[1][0x20 + (start << 4)];
+
+    for(column = start; column < end; column++)
+    {
+      atbuf = nt[column];
+      DRAW_COLUMN_CYCLONE(atbuf, v_line, wpalbase)
+    }
+  }
+
+  /* Merge background layers */
+  merge_cyclone(&linebuf_cyclone[1][0x20], &linebuf_cyclone[0][0x20], &linebuf_cyclone[0][0x20], lut_cyclone[0], bitmap.viewport.w);
 }
 
+
+/*** todo all these ***/
 void render_bg_cyclone_im2(int line)
 {
   render_bg_cyclone(line);
@@ -3292,7 +3480,7 @@ void render_bg_cyclone_im2(int line)
 
 void render_bg_cyclone_im2_vs(int line)
 {
-  render_bg_cyclone(line);
+  render_bg_cyclone_vs(line);
 }
 
 
