@@ -131,8 +131,10 @@ extern void parse_satb_m4(int line);
 extern void parse_satb_m5(int line);
 extern void update_bg_pattern_cache_m4(int index);
 extern void update_bg_pattern_cache_m5(int index);
+extern void update_bg_pattern_cache_cyclone(int index); /*** extended ***/
 extern void color_update_m4(int index, unsigned int data);
 extern void color_update_m5(int index, unsigned int data);
+extern void color_update_cyclone(int index, unsigned int data); /*** extended ***/
 
 /* Function pointers */
 extern void (*render_bg)(int line);

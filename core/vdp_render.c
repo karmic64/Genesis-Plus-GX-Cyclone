@@ -4003,6 +4003,72 @@ void update_bg_pattern_cache_m5(int index)
   }
 }
 
+/*** extended ***/
+void update_bg_pattern_cache_cyclone(int index)
+{
+  int i;
+  uint8 x, y, c;
+  uint8 *dst;
+  uint16 name;
+  uint8 b0,b1,b2,b3,b4,b5; /*** rearranged to the more sensible order ***/
+  uint8 p[8];
+
+  for(i = 0; i < index; i++)
+  {
+    /* Get modified pattern name index */
+    name = bg_name_list[i];
+
+    /* Pattern cache base address */
+    dst = &bg_pattern_cache[name << 6];
+
+    /* Check modified lines */
+    for(y = 0; y < 8; y ++)
+    {
+      if(bg_name_dirty[name] & (1 << y))
+      {
+        uint8 *src = &vram[name*0x30 + y*6];
+        
+#ifdef LSB_FIRST
+        b0 = src[5];
+        b1 = src[4];
+        b2 = src[3];
+        b3 = src[2];
+        b4 = src[1];
+        b5 = src[0];
+#else
+        b0 = src[4];
+        b1 = src[5];
+        b2 = src[2];
+        b3 = src[3];
+        b4 = src[0];
+        b5 = src[1];
+#endif
+        
+        p[0] = b5 & 0x3f;
+        p[1] = (b5 >> 6) | ((b4 & 0x0f) << 2);
+        p[2] = (b4 >> 4) | ((b3 & 3) << 4);
+        p[3] = (b3 >> 2);
+        p[4] = b2 & 0x3f;
+        p[5] = (b2 >> 6) | ((b1 & 0x0f) << 2);
+        p[6] = (b1 >> 4) | ((b0 & 3) << 4);
+        p[7] = (b0 >> 2);
+        
+        for (x = 0; x < 8; x++)
+        {
+          dst[0x00000 | (y) << 3 | (x)] = p[x];
+          dst[0x20000 | (y) << 3 | (x^7)] = p[x];
+          dst[0x40000 | (y^7) << 3 | (x)] = p[x];
+          dst[0x60000 | (y^7) << 3 | (x^7)] = p[x];
+        }
+      }
+    }
+
+    /* Clear modified pattern flag */
+    bg_name_dirty[name] = 0;
+  }
+  
+}
+
 
 /*--------------------------------------------------------------------------*/
 /* Window & Plane A clipping update function (Mode 5)                       */

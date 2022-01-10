@@ -1472,6 +1472,96 @@ int vdp_68k_irq_ack(int int_level)
 /* VDP registers update function                                            */
 /*--------------------------------------------------------------------------*/
 
+/*** new function copied from reg 1 handler ***/
+static void update_md_rendering_mode(unsigned int cycles)
+{
+  int i;
+  if (reg[1] & 0x04)
+  {
+    /* Mode 5 rendering */
+    parse_satb = parse_satb_m5;
+    update_bg_pattern_cache = CYCLONE_ENABLED ? update_bg_pattern_cache_cyclone : update_bg_pattern_cache_m5;
+    if (im2_flag)
+    {
+      render_bg = (reg[11] & 0x04) ? render_bg_m5_im2_vs : render_bg_m5_im2;
+      render_obj = (reg[12] & 0x08) ? render_obj_m5_im2_ste : render_obj_m5_im2;
+    }
+    else
+    {
+      render_bg = (reg[11] & 0x04) ? render_bg_m5_vs : render_bg_m5;
+      render_obj = (reg[12] & 0x08) ? render_obj_m5_ste : render_obj_m5;
+    }
+
+    /* Reset color palette */
+    color_update_m5(0x00, *(uint16 *)&cram[border << 1]);
+    for (i = 1; i < 0x40; i++)
+    {
+      color_update_m5(i, *(uint16 *)&cram[i << 1]);
+    }
+
+    /* Mode 5 bus access */
+    vdp_68k_data_w = vdp_68k_data_w_m5;
+    vdp_z80_data_w = vdp_z80_data_w_m5;
+    vdp_68k_data_r = vdp_68k_data_r_m5;
+    vdp_z80_data_r = vdp_z80_data_r_m5;
+
+    /* Clear HVC latched value */
+    hvc_latch = 0;
+
+    /* Check if HVC latch bit is set */
+    if (reg[0] & 0x02)
+    {
+      /* Latch current HVC */
+      hvc_latch = vdp_hvc_r(cycles) | 0x10000;
+    }
+
+    /* max tiles to invalidate */
+    bg_list_index = 0x800;
+  }
+  else
+  {
+    /* Mode 4 rendering */
+    parse_satb = parse_satb_m4;
+    update_bg_pattern_cache = update_bg_pattern_cache_m4;
+    render_bg = render_bg_m4;
+    render_obj = render_obj_m4;
+
+    /* Reset color palette */
+    for (i = 0; i < 0x20; i++)
+    {
+      color_update_m4(i, *(uint16 *)&cram[i << 1]);
+    }
+    color_update_m4(0x40, *(uint16 *)&cram[(0x10 | (border & 0x0F)) << 1]);
+
+    /* Mode 4 bus access */
+    vdp_68k_data_w = vdp_68k_data_w_m4;
+    vdp_z80_data_w = vdp_z80_data_w_m4;
+    vdp_68k_data_r = vdp_68k_data_r_m4;
+    vdp_z80_data_r = vdp_z80_data_r_m4;
+
+    /* Latch current HVC */
+    hvc_latch = vdp_hvc_r(cycles) | 0x10000;
+
+    /* max tiles to invalidate */
+    bg_list_index = 0x200;
+  }
+
+  /* Invalidate pattern cache */
+  for (i=0;i<bg_list_index;i++) 
+  {
+    bg_name_list[i] = i;
+    bg_name_dirty[i] = 0xFF;
+  }
+
+  /* Update vertical counter max value */
+  vc_max = vc_table[(reg[1] >> 2) & 3][vdp_pal];
+
+  /* Display height change should be applied on next frame */
+  bitmap.viewport.changed |= 2; 
+}
+
+
+
 static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
 {
 #ifdef LOGVDP
@@ -1512,15 +1602,11 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         }
         
         
-        /*** Invalidate pattern cache ***/
-        int i;
-        for (i=0;i<0x800;i++) 
-        {
-          bg_name_list[i] = i;
-          bg_name_dirty[i] = 0xFF;
-        }
-        bg_list_index = i;
       }
+      
+      
+      if (r & 0xc0) /*** update the rendering mode for both exgfx/bitmap changes ***/
+        update_md_rendering_mode(cycles);
       
       break;
     }
@@ -1739,89 +1825,8 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         /* Mega Drive VDP only */
         if (system_hw & SYSTEM_MD)
         {
-          int i;
-          if (d & 0x04)
-          {
-            /* Mode 5 rendering */
-            parse_satb = parse_satb_m5;
-            update_bg_pattern_cache = update_bg_pattern_cache_m5;
-            if (im2_flag)
-            {
-              render_bg = (reg[11] & 0x04) ? render_bg_m5_im2_vs : render_bg_m5_im2;
-              render_obj = (reg[12] & 0x08) ? render_obj_m5_im2_ste : render_obj_m5_im2;
-            }
-            else
-            {
-              render_bg = (reg[11] & 0x04) ? render_bg_m5_vs : render_bg_m5;
-              render_obj = (reg[12] & 0x08) ? render_obj_m5_ste : render_obj_m5;
-            }
-
-            /* Reset color palette */
-            color_update_m5(0x00, *(uint16 *)&cram[border << 1]);
-            for (i = 1; i < 0x40; i++)
-            {
-              color_update_m5(i, *(uint16 *)&cram[i << 1]);
-            }
-
-            /* Mode 5 bus access */
-            vdp_68k_data_w = vdp_68k_data_w_m5;
-            vdp_z80_data_w = vdp_z80_data_w_m5;
-            vdp_68k_data_r = vdp_68k_data_r_m5;
-            vdp_z80_data_r = vdp_z80_data_r_m5;
-
-            /* Clear HVC latched value */
-            hvc_latch = 0;
-
-            /* Check if HVC latch bit is set */
-            if (reg[0] & 0x02)
-            {
-              /* Latch current HVC */
-              hvc_latch = vdp_hvc_r(cycles) | 0x10000;
-            }
-
-            /* max tiles to invalidate */
-            bg_list_index = 0x800;
-          }
-          else
-          {
-            /* Mode 4 rendering */
-            parse_satb = parse_satb_m4;
-            update_bg_pattern_cache = update_bg_pattern_cache_m4;
-            render_bg = render_bg_m4;
-            render_obj = render_obj_m4;
-
-            /* Reset color palette */
-            for (i = 0; i < 0x20; i++)
-            {
-              color_update_m4(i, *(uint16 *)&cram[i << 1]);
-            }
-            color_update_m4(0x40, *(uint16 *)&cram[(0x10 | (border & 0x0F)) << 1]);
-
-            /* Mode 4 bus access */
-            vdp_68k_data_w = vdp_68k_data_w_m4;
-            vdp_z80_data_w = vdp_z80_data_w_m4;
-            vdp_68k_data_r = vdp_68k_data_r_m4;
-            vdp_z80_data_r = vdp_z80_data_r_m4;
-
-            /* Latch current HVC */
-            hvc_latch = vdp_hvc_r(cycles) | 0x10000;
-
-            /* max tiles to invalidate */
-            bg_list_index = 0x200;
-          }
-
-          /* Invalidate pattern cache */
-          for (i=0;i<bg_list_index;i++) 
-          {
-            bg_name_list[i] = i;
-            bg_name_dirty[i] = 0xFF;
-          }
-
-          /* Update vertical counter max value */
-          vc_max = vc_table[(d >> 2) & 3][vdp_pal];
-
-          /* Display height change should be applied on next frame */
-          bitmap.viewport.changed |= 2; 
+          /*** move all this stuff to its own function ***/
+          update_md_rendering_mode(cycles);
         }
         else
         {
