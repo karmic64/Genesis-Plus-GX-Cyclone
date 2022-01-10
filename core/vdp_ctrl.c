@@ -147,7 +147,7 @@ static uint8 code;            /* Code register */
 static uint8 dma_type;        /* DMA mode */
 static uint32 addr;           /* Address register */ /*** extended ***/
 static uint32 addr_latch;     /* Latched A15, A14 of address */ /*** also a16 ***/
-static uint16 sat_base_mask;  /* Base bits of SAT */
+static uint32 sat_base_mask;  /* Base bits of SAT */
 static uint16 sat_addr_mask;  /* Index bits of SAT */
 static uint16 dma_src;        /* DMA source address */
 static uint32 dma_endCycles;  /* 68k cycles to DMA end */

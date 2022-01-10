@@ -477,10 +477,12 @@ INLINE void WRITE_LONG(void *address, uint32 data)
     temp = *src++; \
     if (temp & 0x3f) \
     { \
-      if (lb[i] < 0x800) /*** bitmap pixels are always behind ***/ \
+      if (lb[i] < 0x800) { /*** bitmap pixels are always behind ***/ \
         temp |= (lb[i] << 11); \
-      lb[i] = TABLE[temp | ATTR] | PALBASE; \
-      status |= ((temp & 0x8000) >> 10); \
+        lb[i] = TABLE[temp | ATTR | PALBASE]; \
+        status |= ((temp & 0x200000) >> 17); \
+      } else \
+        lb[i] = temp | ATTR | PALBASE | 0x400; \
     } \
   }
 
@@ -4046,7 +4048,7 @@ void render_obj_m5_im2_ste(int line)
 }
 
 
-/*** todo all these ***/
+
 void render_obj_cyclone(int line)
 {
   int i, column;
@@ -4158,6 +4160,7 @@ void render_obj_cyclone(int line)
   spr_ovr = 0;
 }
 
+/*** todo all these ***/
 void render_obj_cyclone_ste(int line)
 {
   render_obj_cyclone(line);
@@ -4880,7 +4883,7 @@ void remap_line(int line)
       do
       {
         uint32 v = *(src++);
-        if (v < 0x800) *(dst++) = pixel[v];
+        if (v < 0x800) *(dst++) = pixel[v&0x1ff];
         else *(dst++) = cyclone_bitmap_lut[v-0x800];
       } while (--width);
     }
