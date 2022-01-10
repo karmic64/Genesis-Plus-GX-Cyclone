@@ -69,6 +69,8 @@ extern sms_ntsc_t *sms_ntsc;
 /* Pixel priority look-up tables information */
 #define LUT_MAX     (6)
 #define LUT_SIZE    (0x10000)
+
+#define LUT_MAX_CYCLONE (3)
 #define LUT_SIZE_CYCLONE (0x800*0x800)
 
 
@@ -469,6 +471,19 @@ INLINE void WRITE_LONG(void *address, uint32 data)
     } \
   }
 
+#define DRAW_SPRITE_TILE_CYCLONE(WIDTH,ATTR,TABLE,PALBASE)  \
+  for (i=0;i<WIDTH;i++) \
+  { \
+    temp = *src++; \
+    if (temp & 0x3f) \
+    { \
+      if (lb[i] < 0x800) /*** bitmap pixels are always behind ***/ \
+        temp |= (lb[i] << 11); \
+      lb[i] = TABLE[temp | ATTR] | PALBASE; \
+      status |= ((temp & 0x8000) >> 10); \
+    } \
+  }
+
 #define DRAW_SPRITE_TILE_ACCURATE(WIDTH,ATTR,TABLE)  \
   for (i=0;i<WIDTH;i++) \
   { \
@@ -638,7 +653,7 @@ static uint32 bp_lut[0x10000];
 
 /* Layer priority pixel look-up tables */
 static uint8 lut[LUT_MAX][LUT_SIZE];
-static uint16 lut_cyclone[LUT_MAX][LUT_SIZE_CYCLONE];
+static uint16 lut_cyclone[LUT_MAX_CYCLONE][LUT_SIZE_CYCLONE];
 
 /* Output pixel data look-up tables*/
 static PIXEL_OUT_T pixel[64*8]; /*** cyclone mode needs more colors ***/
@@ -853,6 +868,23 @@ static uint32 make_lut_obj(uint32 bx, uint32 sx)
   return (c | 0x80);
 }
 
+static uint32 make_lut_obj_cyclone(uint32 bx, uint32 sx)
+{
+  int c;
+  
+  int bf = (bx & 0x3ff);
+  int bs = (bx & 0x400);
+  int sf = (sx & 0x3ff);
+  
+  if (!(sx & 0x3f)) return bx;
+  
+  c = (bs ? bf : sf);
+  
+  if (!(c&0x3f)) c &= 0x600;
+  
+  return (c | 0x400);
+}
+
 
 /* Input (bx):  d5-d0=color, d6=priority, d7=opaque sprite pixel marker */
 /* Input (sx):  d5-d0=color, d6=priority, d7=unused */
@@ -881,6 +913,33 @@ static uint32 make_lut_bgobj(uint32 bx, uint32 sx)
   if((c & 0x0F) == 0x00) c &= 0x80;
 
   return (c | 0x80);
+}
+
+
+static uint32 make_lut_bgobj_cyclone(uint32 bx, uint32 sx)
+{
+  int c;
+
+  int bf = (bx & 0x1ff);
+  int bs = (bx & 0x400);
+  int bp = (bx & 0x200);
+  int b  = (bx & 0x3F);
+
+  int sf = (sx & 0x1ff);
+  int sp = (sx & 0x200);
+  int s  = (sx & 0x3F);
+
+  if(s == 0) return bx;
+
+  /* Previous sprite has higher priority */
+  if(bs) return bx;
+
+  c = (sp ? sf : (bp ? (b ? bf : sf) : sf));
+
+  /* Strip palette & priority bits from transparent pixels */
+  if((c & 0x3F) == 0x00) c &= 0x400;
+
+  return (c | 0x400);
 }
 
 /* Input (bx):  d5-d0=color, d6=priority, d7=intensity (half/normal) */
@@ -3214,7 +3273,7 @@ void render_bg_cyclone(int line)
   }
 
   /* Merge background layers */
-  merge_cyclone(&linebuf_cyclone[1][0x20], &linebuf_cyclone[0][0x20], &linebuf_cyclone[0][0x20], lut_cyclone[(reg[12] & 0x08) >> 2], bitmap.viewport.w);
+  merge_cyclone(&linebuf_cyclone[1][0x20], &linebuf_cyclone[0][0x20], &linebuf_cyclone[0][0x20], lut_cyclone[0], bitmap.viewport.w);
 }
 
 
@@ -3990,22 +4049,128 @@ void render_obj_m5_im2_ste(int line)
 /*** todo all these ***/
 void render_obj_cyclone(int line)
 {
-  
+  int i, column;
+  int xpos, width;
+  int pixelcount = 0;
+  int masked = 0;
+  int max_pixels = MODE5_MAX_SPRITE_PIXELS;
+
+  uint8 *src, *s;
+  uint32 *lb;
+  uint32 temp, v_line;
+  uint32 attr, name, atex;
+
+  /* Sprite list for current line */
+  object_info_t *object_info = obj_info[line];
+  int count = object_count[line];
+
+  /* Draw sprites in front-to-back order */
+  while (count--)
+  {
+    /* Sprite X position */
+    xpos = object_info->xpos;
+
+    /* Sprite masking  */
+    if (xpos)
+    {
+      /* Requires at least one sprite with xpos > 0 */
+      spr_ovr = 1;
+    }
+    else if (spr_ovr)
+    {
+      /* Remaining sprites are not drawn */
+      masked = 1;
+    }
+
+    /* Display area offset */
+    xpos = xpos - 0x80;
+
+    /* Sprite size */
+    temp = object_info->size;
+
+    /* Sprite width */
+    width = 8 + ((temp & 0x0C) << 1);
+
+    /* Update pixel count (off-screen sprites are included) */
+    pixelcount += width;
+
+    /* Is sprite across visible area ? */
+    if (((xpos + width) > 0) && (xpos < bitmap.viewport.w) && !masked)
+    {
+      /* Sprite attributes */
+      attr = object_info->attr;
+
+      /* Sprite vertical offset */
+      v_line = object_info->ypos;
+
+      /* Sprite priority + palette bits */
+      atex = atex_table_cyclone[(attr >> 13) & 7];
+
+      /* Pattern name base */
+      name = attr & 0x07FF;
+
+      /* Mask vflip/hflip */
+      attr &= 0x1800;
+
+      /* Pointer into pattern name offset look-up table */
+      s = &name_lut[((attr >> 3) & 0x300) | (temp << 4) | ((v_line & 0x18) >> 1)];
+
+      /* Pointer into line buffer */
+      lb = &linebuf_cyclone[0][0x20 + xpos];
+
+      /* Max. number of sprite pixels rendered per line */
+      if (pixelcount > max_pixels)
+      {
+        /* Adjust number of pixels to draw */
+        width -= (pixelcount - max_pixels);
+      }
+
+      /* Number of tiles to draw */
+      width = width >> 3;
+
+      /* Pattern row index */
+      v_line = (v_line & 7) << 3;
+
+      /* Draw sprite patterns */
+      for (column = 0; column < width; column++, lb+=8)
+      {
+        temp = attr | ((name + s[column]) & 0x07FF);
+        src = &bg_pattern_cache[(temp << 6) | (v_line)];
+        DRAW_SPRITE_TILE_CYCLONE(8,atex,lut_cyclone[1],spalbase)
+      }
+    }
+
+    /* Sprite limit */
+    if (pixelcount >= max_pixels)
+    {
+      /* Sprite masking is effective on next line if max pixel width is reached */
+      spr_ovr = (pixelcount >= bitmap.viewport.w);
+
+      /* Stop sprite rendering */
+      return;
+    }
+
+    /* Next sprite entry */
+    object_info++;
+  }
+
+  /* Clear sprite masking for next line  */
+  spr_ovr = 0;
 }
 
 void render_obj_cyclone_ste(int line)
 {
-  
+  render_obj_cyclone(line);
 }
 
 void render_obj_cyclone_im2(int line)
 {
-  
+  render_obj_cyclone(line);
 }
 
 void render_obj_cyclone_im2_ste(int line)
 {
-  
+  render_obj_cyclone(line);
 }
 
 
@@ -4450,10 +4615,10 @@ void update_bg_pattern_cache_cyclone(int index)
         
         for (x = 0; x < 8; x++)
         {
-          dst[0x00000 | (y) << 3 | (x)] = p[x];
-          dst[0x20000 | (y) << 3 | (x^7)] = p[x];
-          dst[0x40000 | (y^7) << 3 | (x)] = p[x];
-          dst[0x60000 | (y^7) << 3 | (x^7)] = p[x];
+          dst[0x00000 | ((y) << 3) | (x)] = p[x];
+          dst[0x20000 | ((y) << 3) | (x^7)] = p[x];
+          dst[0x40000 | ((y^7) << 3) | (x)] = p[x];
+          dst[0x60000 | ((y^7) << 3) | (x^7)] = p[x];
         }
       }
     }
@@ -4547,6 +4712,8 @@ void render_init(void)
 
       /*** todo the rest of these ***/
       lut_cyclone[0][index] = make_lut_bg_cyclone(bx, ax);
+      lut_cyclone[1][index] = make_lut_bgobj_cyclone(bx, ax);
+      lut_cyclone[2][index] = make_lut_obj_cyclone(bx, ax);
     }
   }
 

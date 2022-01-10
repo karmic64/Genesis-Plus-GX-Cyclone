@@ -103,10 +103,10 @@ uint32 fifo_slots;                /* VDP FIFO access slot count */
 uint32 hvc_latch;                 /* latched HV counter */
 const uint8 *hctab;               /* pointer to H Counter table */
 /*** first colors of each layer's palette in cyclone mode ***/
-uint8 apalbase;
-uint8 bpalbase;
-uint8 spalbase;
-uint8 wpalbase;
+uint16 apalbase;
+uint16 bpalbase;
+uint16 spalbase;
+uint16 wpalbase;
 
 /* Function pointers */
 void (*vdp_68k_data_w)(unsigned int data);
@@ -1658,10 +1658,10 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         
       }
       
-      apalbase = d & 1 ? 0x40 : 0;
-      bpalbase = d & 2 ? 0x40 : 0;
-      wpalbase = d & 4 ? 0x40 : 0;
-      spalbase = d & 8 ? 0x40 : 0;
+      apalbase = d & 1 ? 0x100 : 0;
+      bpalbase = d & 2 ? 0x100 : 0;
+      wpalbase = d & 4 ? 0x100 : 0;
+      spalbase = d & 8 ? 0x100 : 0;
       
       if (r & 0xc0) /*** update the rendering mode for both exgfx/bitmap changes ***/
         update_md_rendering_mode(cycles);
