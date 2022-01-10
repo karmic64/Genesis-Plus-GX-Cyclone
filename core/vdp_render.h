@@ -120,6 +120,8 @@ extern void render_bg_m5(int line);
 extern void render_bg_m5_vs(int line);
 extern void render_bg_m5_im2(int line);
 extern void render_bg_m5_im2_vs(int line);
+extern void render_bg_cyclone(int line);
+extern void render_bg_cyclone_bitmap(int line);
 extern void render_obj_tms(int line);
 extern void render_obj_m4(int line);
 extern void render_obj_m5(int line);

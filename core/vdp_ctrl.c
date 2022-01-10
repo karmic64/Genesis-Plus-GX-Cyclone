@@ -42,7 +42,7 @@
 #include "shared.h"
 #include "hvc.h"
 
-#define CYCLONE_ENABLED ((reg[0x18] & 0x80) && (reg[1] & 4))
+#define CYCLONE_ENABLED (reg[0x18] & 0x80)
 
 /* Mark a pattern as modified */ /*** extended for 0x30-byte 6bpp tiles ***/
 #define MARK_BG_DIRTY(addr)                         \
@@ -1480,23 +1480,42 @@ static void update_md_rendering_mode(unsigned int cycles)
   {
     /* Mode 5 rendering */
     parse_satb = parse_satb_m5;
-    update_bg_pattern_cache = CYCLONE_ENABLED ? update_bg_pattern_cache_cyclone : update_bg_pattern_cache_m5;
-    if (im2_flag)
+    if (CYCLONE_ENABLED)
     {
-      render_bg = (reg[11] & 0x04) ? render_bg_m5_im2_vs : render_bg_m5_im2;
-      render_obj = (reg[12] & 0x08) ? render_obj_m5_im2_ste : render_obj_m5_im2;
+      update_bg_pattern_cache = update_bg_pattern_cache_cyclone;
+      
+      if (reg[0x18] & 0x40)
+      {
+        render_bg = render_bg_cyclone_bitmap;
+      }
+      else
+      {
+        render_bg = render_bg_cyclone;
+      }
+      
+      
+      /*** todo everything else ***/
     }
     else
     {
-      render_bg = (reg[11] & 0x04) ? render_bg_m5_vs : render_bg_m5;
-      render_obj = (reg[12] & 0x08) ? render_obj_m5_ste : render_obj_m5;
-    }
+      update_bg_pattern_cache = update_bg_pattern_cache_m5;
+      if (im2_flag)
+      {
+        render_bg = (reg[11] & 0x04) ? render_bg_m5_im2_vs : render_bg_m5_im2;
+        render_obj = (reg[12] & 0x08) ? render_obj_m5_im2_ste : render_obj_m5_im2;
+      }
+      else
+      {
+        render_bg = (reg[11] & 0x04) ? render_bg_m5_vs : render_bg_m5;
+        render_obj = (reg[12] & 0x08) ? render_obj_m5_ste : render_obj_m5;
+      }
 
-    /* Reset color palette */
-    color_update_m5(0x00, *(uint16 *)&cram[border << 1]);
-    for (i = 1; i < 0x40; i++)
-    {
-      color_update_m5(i, *(uint16 *)&cram[i << 1]);
+      /* Reset color palette */
+      color_update_m5(0x00, *(uint16 *)&cram[border << 1]);
+      for (i = 1; i < 0x40; i++)
+      {
+        color_update_m5(i, *(uint16 *)&cram[i << 1]);
+      }
     }
 
     /* Mode 5 bus access */

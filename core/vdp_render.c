@@ -580,12 +580,19 @@ static uint32 bp_lut[0x10000];
 static uint8 lut[LUT_MAX][LUT_SIZE];
 
 /* Output pixel data look-up tables*/
-static PIXEL_OUT_T pixel[0x100];
+static PIXEL_OUT_T pixel[64*8]; /*** cyclone mode needs more colors ***/
 static PIXEL_OUT_T pixel_lut[3][0x200];
 static PIXEL_OUT_T pixel_lut_m4[0x40];
 
 /* Background & Sprite line buffers */
 static uint8 linebuf[2][0x200];
+
+/*** cyclone mode line buffers ***/
+/*** values 0x000-0x1ff are 6bpp pixels, everything else is a bitmap mode pixel ***/
+static uint32 linebuf_cyclone[2][0x200];
+
+/*** cyclone bitmap mode YUV -> pixel conversion lut ***/
+static PIXEL_OUT_T cyclone_bitmap_lut[0x40*0x40*0x20];
 
 /* Sprite limit flag */
 static uint8 spr_ovr;
@@ -975,6 +982,8 @@ INLINE void merge(uint8 *srca, uint8 *srcb, uint8 *dst, uint8 *table, int width)
 static void palette_init(void)
 {
   int r, g, b, i;
+  int y, u, v; /*** cyclone bitmap mode ***/
+  int c, d, e;
 
   /************************************************/
   /* Each R,G,B color channel is 4-bit with a     */
@@ -991,6 +1000,31 @@ static void palette_init(void)
   /* with x = original CRAM value (2, 3 or 4-bit) */
   /*  (*) 2-bit CRAM value is expanded to 4-bit   */
   /************************************************/
+  
+  /*** initialize cyclone bitmap mode YUV->RGB table ***/
+  for (i = 0; i < 64*64*32; i++)
+  {
+    u = ((i >> 11) & 0x3f) << 2;
+    v = ((i >> 5) & 0x3f) << 2;
+    y = ((i >> 0) & 0x1f) << 3;
+    
+    c = y-16;
+    d = u-128;
+    e = v-128;
+    
+    r = (298*c + 409*e + 128) >> 8;
+    g = (298*c - 100*d - 208*e + 128) >> 8;
+    b = (298*c + 516*d + 128) >> 8;
+    
+    if (r < 0) r = 0;
+    if (r > 255) r = 255;
+    if (g < 0) g = 0;
+    if (g > 255) g = 255;
+    if (b < 0) b = 0;
+    if (b > 255) b = 255;
+    
+    cyclone_bitmap_lut[i] = MAKE_PIXEL_CYCLONE(r,g,b);
+  }
 
   /* Initialize Mode 5 pixel color look-up tables */
   for (i = 0; i < 0x200; i++)
@@ -2906,6 +2940,60 @@ void render_bg_m5_im2_vs(int line)
 #endif
 
 
+
+
+/*** todo cyclone bg ***/
+void render_bg_cyclone(int line)
+{
+  pixel[0x10] = MAKE_PIXEL_CYCLONE(line,0,0);
+  
+  for (int i = 0; i < 0x200; i++)
+    linebuf_cyclone[0][i] = 0x10;
+}
+
+
+/*** cyclone bitmap bg ***/
+void render_bg_cyclone_bitmap(int line)
+{
+  int width = bitmap.viewport.w;
+  
+  uint32 *dst = &linebuf_cyclone[0][0x20];
+  
+  uint8 *src = &vram[0x4e00 + 320*(line & (~1))];
+  int row = line & 1;
+  
+  for (int column = 0; column < width; column += 2)
+  {
+#ifdef LSB_FIRST
+    uint32 box = (src[3]<<24) | (src[2]<<16) | (src[1]<<8) | src[0];
+#else
+    uint32 box = (src[2]<<24) | (src[3]<<16) | (src[0]<<8) | src[1];
+#endif
+    
+    uint8 y = box >> 26;
+    uint8 u = (box >> 20) & 0x3f;
+    uint8 vl;
+    uint8 vr;
+    if (!row)
+    { /*** upper ***/
+      vl = box & 0x1f;
+      vr = (box >> 5) & 0x1f;
+    }
+    else
+    { /*** lower ***/
+      vl = (box >> 10) & 0x1f;
+      vr = (box >> 15) & 0x1f;
+    }
+    
+    *(dst++) = ((y<<11)|(u<<5)|vl) + 0x200;
+    *(dst++) = ((y<<11)|(u<<5)|vr) + 0x200;
+    
+    src += 4;
+  }
+}
+
+
+
 /*--------------------------------------------------------------------------*/
 /* Sprite layer rendering functions                                         */
 /*--------------------------------------------------------------------------*/
@@ -4177,6 +4265,8 @@ void render_reset(void)
 /* Line rendering functions                                                 */
 /*--------------------------------------------------------------------------*/
 
+#define CYCLONE_ENABLED ((reg[1] & 4) && (reg[0x18] & 0x80))
+
 void render_line(int line)
 {
   /* Check display status */
@@ -4213,8 +4303,16 @@ void render_line(int line)
     /* Horizontal borders */
     if (bitmap.viewport.x > 0)
     {
-      memset(&linebuf[0][0x20 - bitmap.viewport.x], 0x40, bitmap.viewport.x);
-      memset(&linebuf[0][0x20 + bitmap.viewport.w], 0x40, bitmap.viewport.x);
+      if (CYCLONE_ENABLED)
+      {
+        memset(&linebuf_cyclone[0][0x20 - bitmap.viewport.x], 0x00, (bitmap.viewport.x)*sizeof(**linebuf_cyclone));
+        memset(&linebuf_cyclone[0][0x20 + bitmap.viewport.w], 0x00, (bitmap.viewport.x)*sizeof(**linebuf_cyclone));
+      }
+      else
+      {
+        memset(&linebuf[0][0x20 - bitmap.viewport.x], 0x40, bitmap.viewport.x);
+        memset(&linebuf[0][0x20 + bitmap.viewport.w], 0x40, bitmap.viewport.x);
+      }
     }
   }
   else
@@ -4231,7 +4329,10 @@ void render_line(int line)
     }
 
     /* Blanked line */
-    memset(&linebuf[0][0x20 - bitmap.viewport.x], 0x40, bitmap.viewport.w + 2*bitmap.viewport.x);
+    if (CYCLONE_ENABLED)
+      memset(&linebuf_cyclone[0][0x20 - bitmap.viewport.x], 0x00, (bitmap.viewport.w + 2*bitmap.viewport.x)*sizeof(**linebuf_cyclone));
+    else
+      memset(&linebuf[0][0x20 - bitmap.viewport.x], 0x40, bitmap.viewport.w + 2*bitmap.viewport.x);
   }
 
   /* Pixel color remapping */
@@ -4240,7 +4341,10 @@ void render_line(int line)
 
 void blank_line(int line, int offset, int width)
 {
-  memset(&linebuf[0][0x20 + offset], 0x40, width);
+  if (CYCLONE_ENABLED)
+    memset(&linebuf_cyclone[0][0x20 + offset], 0x00, width*sizeof(**linebuf_cyclone));
+  else
+    memset(&linebuf[0][0x20 + offset], 0x40, width);
   remap_line(line);
 }
 
@@ -4248,9 +4352,6 @@ void remap_line(int line)
 {
   /* Line width */
   int width = bitmap.viewport.w + 2*bitmap.viewport.x;
-
-  /* Pixel line buffer */
-  uint8 *src = &linebuf[0][0x20 - bitmap.viewport.x];
 
   /* Adjust line offset in framebuffer */
   line = (line + bitmap.viewport.y) % lines_per_frame;
@@ -4266,6 +4367,7 @@ void remap_line(int line)
 
 #if defined(USE_15BPP_RENDERING) || defined(USE_16BPP_RENDERING)
   /* NTSC Filter (only supported for 15 or 16-bit pixels rendering) */
+  /*** this cannot be used
   if (config.ntsc)
   {
     if (reg[12] & 0x01)
@@ -4277,29 +4379,48 @@ void remap_line(int line)
       sms_ntsc_blit(sms_ntsc, ( SMS_NTSC_IN_T const * )pixel, src, width, line);
     }
   }
-  else
+  else ***/
 #endif
   {
 #ifdef CUSTOM_BLITTER
+#error "Custom blitter is not supported"
     CUSTOM_BLITTER(line, width, pixel, src)
 #else
     /* Convert VDP pixel data to output pixel format */
     PIXEL_OUT_T *dst = ((PIXEL_OUT_T *)&bitmap.data[(line * bitmap.pitch)]);
-    if (config.lcd)
+    if (CYCLONE_ENABLED) /*** cyclone 6bpp mode ***/
     {
+      uint32 *src = &linebuf_cyclone[0][0x20 - bitmap.viewport.x];
+      
       do
       {
-        RENDER_PIXEL_LCD(src,dst,pixel,config.lcd);
-      }
-      while (--width);
+        uint32 v = *(src++);
+        if (v < 0x200) *(dst++) = pixel[v];
+        else *(dst++) = cyclone_bitmap_lut[v-0x200];
+      } while (--width);
     }
     else
-    {
-      do
+    { /*** standard modes ***/
+      
+      /*** this was moved down here ***/
+      /* Pixel line buffer */
+      uint8 *src = &linebuf[0][0x20 - bitmap.viewport.x];
+      if (config.lcd)
       {
-        *dst++ = pixel[*src++];
+        do
+        {
+          RENDER_PIXEL_LCD(src,dst,pixel,config.lcd);
+        }
+        while (--width);
       }
-      while (--width);
+      else
+      {
+        do
+        {
+          *dst++ = pixel[*src++];
+        }
+        while (--width);
+      }
     }
  #endif
   }
