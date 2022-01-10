@@ -102,6 +102,11 @@ int32 fifo_write_cnt;             /* VDP FIFO write count */
 uint32 fifo_slots;                /* VDP FIFO access slot count */
 uint32 hvc_latch;                 /* latched HV counter */
 const uint8 *hctab;               /* pointer to H Counter table */
+/*** first colors of each layer's palette in cyclone mode ***/
+uint8 apalbase;
+uint8 bpalbase;
+uint8 spalbase;
+uint8 wpalbase;
 
 /* Function pointers */
 void (*vdp_68k_data_w)(unsigned int data);
@@ -516,8 +521,9 @@ int vdp_context_load(uint8 *state)
   }
   else
   {
-    for (i=0;i<0x20;i++) 
+    for (i=0;i<0x18;i++) 
     {
+      if (i == 2) vdp_reg_w(0x18, temp_reg[0x18] ,0); /*** update cyclone after updating m5 ***/
       vdp_reg_w(i, temp_reg[i], 0);
     }
   }
@@ -553,10 +559,22 @@ int vdp_context_load(uint8 *state)
     bg_list_index = 0x800;
 
     /* reinitialize palette */
-    color_update_m5(0, *(uint16 *)&cram[border << 1]);
-    for(i = 1; i < 0x40; i++)
+    if (CYCLONE_ENABLED)
     {
-      color_update_m5(i, *(uint16 *)&cram[i << 1]);
+      color_update_cyclone(0x00, *(uint16*)&cram_cyclone[(border<<2)]);
+      color_update_cyclone(0x01, *(uint16*)&cram_cyclone[(border<<2)+2]);
+      for (i = 2; i < 0x400; i++)
+      {
+        color_update_cyclone(i, *(uint16*)&cram_cyclone[i<<1]);
+      }
+    }
+    else
+    {
+      color_update_m5(0, *(uint16 *)&cram[border << 1]);
+      for(i = 1; i < 0x40; i++)
+      {
+        color_update_m5(i, *(uint16 *)&cram[i << 1]);
+      }
     }
   }
   else
@@ -1490,11 +1508,25 @@ static void update_md_rendering_mode(unsigned int cycles)
       }
       else
       {
-        render_bg = render_bg_cyclone;
+        if (im2_flag)
+        {
+          render_bg = (reg[11] & 0x04) ? render_bg_cyclone_im2_vs : render_bg_cyclone_im2;
+          render_obj = (reg[12] & 0x08) ? render_obj_cyclone_im2_ste : render_obj_cyclone_im2;
+        }
+        else
+        {
+          render_bg = (reg[11] & 0x04) ? render_bg_cyclone_vs : render_bg_cyclone;
+          render_obj = (reg[12] & 0x08) ? render_obj_cyclone_ste : render_obj_cyclone;
+        }
       }
       
       
-      /*** todo everything else ***/
+      color_update_cyclone(0x00, *(uint16*)&cram_cyclone[(border<<2)]);
+      color_update_cyclone(0x01, *(uint16*)&cram_cyclone[(border<<2)+2]);
+      for (i = 2; i < 0x400; i++)
+      {
+        color_update_cyclone(i, *(uint16*)&cram_cyclone[i<<1]);
+      }
     }
     else
     {
@@ -1618,11 +1650,18 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
           ntbb &= 0xffff;
           ntwb &= 0xffff;
           hscb &= 0xffff;
+          
+          /*** reset background color ***/
+          vdp_reg_w(7,reg[7]&0x3f,0);
         }
         
         
       }
       
+      apalbase = d & 1 ? 0x40 : 0;
+      bpalbase = d & 2 ? 0x40 : 0;
+      wpalbase = d & 4 ? 0x40 : 0;
+      spalbase = d & 8 ? 0x40 : 0;
       
       if (r & 0xc0) /*** update the rendering mode for both exgfx/bitmap changes ***/
         update_md_rendering_mode(cycles);
@@ -1664,11 +1703,23 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
           int i;
           if (reg[1] & 0x04)
           {
-            /* Mode 5 */
-            color_update_m5(0x00, *(uint16 *)&cram[border << 1]);
-            for (i = 1; i < 0x40; i++)
+            if (CYCLONE_ENABLED)
             {
-              color_update_m5(i, *(uint16 *)&cram[i << 1]);
+              color_update_cyclone(0x00, *(uint16*)&cram_cyclone[(border<<2)]);
+              color_update_cyclone(0x01, *(uint16*)&cram_cyclone[(border<<2)+2]);
+              for (i = 2; i < 0x400; i++)
+              {
+                color_update_cyclone(i, *(uint16*)&cram_cyclone[i<<1]);
+              }
+            }
+            else
+            {
+              /* Mode 5 */
+              color_update_m5(0x00, *(uint16 *)&cram[border << 1]);
+              for (i = 1; i < 0x40; i++)
+              {
+                color_update_m5(i, *(uint16 *)&cram[i << 1]);
+              }
             }
           }
           else
@@ -1928,21 +1979,34 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
       reg[7] = d;
 
       /* Check if backdrop color changed */
-      d &= 0x3F;
+      /*** d &= 0x3F; ***/
 
       if (d != border)
       {
         /* Update backdrop color */
-        border = d;
+        /*** border = d; ***/
 
         /* Reset palette entry */
         if (reg[1] & 4)
         {
-          /* Mode 5 */
-          color_update_m5(0x00, *(uint16 *)&cram[d << 1]);
+          if (CYCLONE_ENABLED)
+          {
+            border = d;
+            color_update_cyclone(0, *(uint16*)&cram_cyclone[(d<<2)]);
+            color_update_cyclone(1, *(uint16*)&cram_cyclone[(d<<2)+2]);
+          }
+          else
+          {
+            d &= 0x3f;
+            border = d;
+            /* Mode 5 */
+            color_update_m5(0x00, *(uint16 *)&cram[d << 1]);
+          }
         }
         else
         {
+          d &= 0x3f;
+          border = d;
           /* Mode 4 */
           color_update_m4(0x40, *(uint16 *)&cram[(0x10 | (d & 0x0F)) << 1]);
         }
@@ -1995,13 +2059,27 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
       hscroll_mask = hscroll_mask_table[d & 0x03];
 
       /* Vertical Scrolling mode */
-      if (d & 0x04)
+      if (CYCLONE_ENABLED)
       {
-        render_bg = im2_flag ? render_bg_m5_im2_vs : render_bg_m5_vs;
+        if (d & 0x04)
+        {
+          render_bg = im2_flag ? render_bg_cyclone_im2_vs : render_bg_cyclone_vs;
+        }
+        else
+        {
+          render_bg = im2_flag ? render_bg_cyclone_im2 : render_bg_cyclone;
+        }
       }
       else
       {
-        render_bg = im2_flag ? render_bg_m5_im2 : render_bg_m5;
+        if (d & 0x04)
+        {
+          render_bg = im2_flag ? render_bg_m5_im2_vs : render_bg_m5_vs;
+        }
+        else
+        {
+          render_bg = im2_flag ? render_bg_m5_im2 : render_bg_m5;
+        }
       }
       break;
     }
@@ -2016,21 +2094,48 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
       if (r & 0x08)
       {
         /* Reset color palette */
-        int i;
-        color_update_m5(0x00, *(uint16 *)&cram[border << 1]);
-        for (i = 1; i < 0x40; i++)
+        if (!CYCLONE_ENABLED)
         {
-          color_update_m5(i, *(uint16 *)&cram[i << 1]);
-        }
-
-        /* Update sprite rendering function */
-        if (d & 0x08)
-        {
-          render_obj = im2_flag ? render_obj_m5_im2_ste : render_obj_m5_ste;
+          int i;
+          color_update_m5(0x00, *(uint16 *)&cram[border << 1]);
+          for (i = 1; i < 0x40; i++)
+          {
+            color_update_m5(i, *(uint16 *)&cram[i << 1]);
+          }
         }
         else
         {
-          render_obj = im2_flag ? render_obj_m5_im2 : render_obj_m5;
+          int i;
+          color_update_cyclone(0x00, *(uint16*)&cram_cyclone[(border<<2)]);
+          color_update_cyclone(0x01, *(uint16*)&cram_cyclone[(border<<2)+2]);
+          for (i = 2; i < 0x400; i++)
+          {
+            color_update_cyclone(i, *(uint16*)&cram_cyclone[i<<1]);
+          }
+        }
+
+        /* Update sprite rendering function */
+        if (CYCLONE_ENABLED)
+        {
+          if (d & 0x08)
+          {
+            render_obj = im2_flag ? render_obj_cyclone_im2_ste : render_obj_cyclone_ste;
+          }
+          else
+          {
+            render_obj = im2_flag ? render_obj_cyclone_im2 : render_obj_cyclone;
+          }
+        }
+        else
+        {
+          if (d & 0x08)
+          {
+            render_obj = im2_flag ? render_obj_m5_im2_ste : render_obj_m5_ste;
+          }
+          else
+          {
+            render_obj = im2_flag ? render_obj_m5_im2 : render_obj_m5;
+          }
         }
       }
 
@@ -2292,11 +2397,21 @@ static void vdp_bus_w(unsigned int data)
         if (data != *p)
         {
           /*** 64 * 8 longs ***/
-          int index = (addr >> 2) & 0x1ff;
+          int index = (addr >> 1) & 0x3ff;
           *p = data;
           
           
-          /*** todo: actual color update ***/
+          /*** no transparent pixel ***/
+          if (index & 0x7e)
+          {
+            color_update_cyclone(index,data);
+          }
+          
+          /*** backdrop color ***/
+          if (index>>1 == border)
+          {
+            color_update_cyclone(index&1,data);
+          }
           
           
           /*** CRAM modified during HBLANK (Striker, Zero the Kamikaze, etc) ***/
@@ -3320,12 +3435,22 @@ static void vdp_dma_fill(unsigned int length)
           
           if (data != *p)
           {
-            int index = (addr >> 2) & 0x1ff;
+            int index = (addr >> 1) & 0x3ff;
             
             *p = data;
             
             
-            /*** todo actual color write ***/
+            /*** no transparent pixel ***/
+            if (index & 0x7e)
+            {
+              color_update_cyclone(index,data);
+            }
+            
+            /*** backdrop color ***/
+            if (index>>1 == border)
+            {
+              color_update_cyclone(index&1,data);
+            }
             
               
             /*** Increment CRAM address ***/

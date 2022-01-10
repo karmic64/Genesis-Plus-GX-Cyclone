@@ -81,6 +81,10 @@ extern int32 fifo_write_cnt;
 extern uint32 fifo_slots;
 extern uint32 hvc_latch;
 extern const uint8 *hctab;
+extern uint8 apalbase;
+extern uint8 bpalbase;
+extern uint8 spalbase;
+extern uint8 wpalbase;
 
 /* Function pointers */
 extern void (*vdp_68k_data_w)(unsigned int data);

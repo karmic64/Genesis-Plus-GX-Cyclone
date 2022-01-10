@@ -69,6 +69,7 @@ extern sms_ntsc_t *sms_ntsc;
 /* Pixel priority look-up tables information */
 #define LUT_MAX     (6)
 #define LUT_SIZE    (0x10000)
+#define LUT_SIZE_CYCLONE (0x800*0x800)
 
 
 #ifdef ALIGN_LONG
@@ -133,6 +134,13 @@ INLINE void WRITE_LONG(void *address, uint32 data)
 #define GET_MSB_TILE(ATTR, LINE) \
   atex = atex_table[(ATTR >> 29) & 7]; \
   src = (uint32 *)&bg_pattern_cache[(ATTR & 0x1FFF0000) >> 10 | (LINE)];
+  
+#define GET_LSB_TILE_CYCLONE(ATTR, LINE) \
+  atex = atex_table_cyclone[(ATTR >> 13) & 7]; \
+  src = (uint8 *)&bg_pattern_cache[(ATTR & 0x00001FFF) << 6 | (LINE)];
+#define GET_MSB_TILE_CYCLONE(ATTR, LINE) \
+  atex = atex_table_cyclone[(ATTR >> 29) & 7]; \
+  src = (uint8 *)&bg_pattern_cache[(ATTR & 0x1FFF0000) >> 10 | (LINE)];
 
 /* Draw 2-cell column (16 pixels high) */
 /*
@@ -150,6 +158,13 @@ INLINE void WRITE_LONG(void *address, uint32 data)
 #define GET_MSB_TILE_IM2(ATTR, LINE) \
   atex = atex_table[(ATTR >> 29) & 7]; \
   src = (uint32 *)&bg_pattern_cache[((ATTR & 0x03FF0000) >> 9 | (ATTR & 0x18000000) >> 10 | (LINE)) ^ ((ATTR & 0x10000000) >> 22)];
+  
+#define GET_LSB_TILE_CYCLONE_IM2(ATTR, LINE) \
+  atex = atex_table_cyclone[(ATTR >> 13) & 7]; \
+  src = (uint8 *)&bg_pattern_cache[((ATTR & 0x000003FF) << 7 | (ATTR & 0x00001800) << 6 | (LINE)) ^ ((ATTR & 0x00001000) >> 6)];
+#define GET_MSB_TILE_CYCLONE_IM2(ATTR, LINE) \
+  atex = atex_table_cyclone[(ATTR >> 29) & 7]; \
+  src = (uint8 *)&bg_pattern_cache[((ATTR & 0x03FF0000) >> 9 | (ATTR & 0x18000000) >> 10 | (LINE)) ^ ((ATTR & 0x10000000) >> 22)];
 
 /*
    One column = 2 tiles
@@ -264,7 +279,32 @@ INLINE void WRITE_LONG(void *address, uint32 data)
 #endif
 #endif /* ALIGN_LONG */
 
+/*** cyclone rendering macros ***/
+/*** cyclone linebuf pixels are uint32s so alignment is not an issue ***/
+#ifdef LSB_FIRST
+#define DRAW_COLUMN_CYCLONE(ATTR, LINE, PALBASE) \
+  GET_LSB_TILE_CYCLONE(ATTR, LINE) \
+  for (int pix = 0; pix < 8; pix++) { \
+    *dst++ = (src[pix] | atex | PALBASE); \
+  } \
+  GET_MSB_TILE_CYCLONE(ATTR, LINE) \
+  for (int pix = 0; pix < 8; pix++) { \
+    *dst++ = (src[pix] | atex | PALBASE); \
+  }
+#else
+#define DRAW_COLUMN_CYCLONE(ATTR, LINE, PALBASE) \
+  GET_MSB_TILE_CYCLONE(ATTR, LINE) \
+  for (int pix = 0; pix < 8; pix++) { \
+    *dst++ = (src[pix] | atex | PALBASE); \
+  GET_LSB_TILE_CYCLONE(ATTR, LINE) \
+  for (int pix = 0; pix < 8; pix++) { \
+    *dst++ = (src[pix] | atex | PALBASE); \
+  }
+#endif
+  
+
 #ifdef ALT_RENDERER
+#error "Alt renderer not supported"
 /* Draw background tiles directly using priority look-up table */
 /* SRC_A = layer A rendered pixel line (4 bytes = 4 pixels at once) */
 /* SRC_B = layer B cached pixel line (4 bytes = 4 pixels at once) */
@@ -520,6 +560,26 @@ static const uint32 atex_table[] =
   0x70707070
 };
 
+/*** in cyclone mode, the linebuffer entries are mapped as follows:
+    98 76543210
+    Rp PPCCCCCC
+      R = priority (*0x200)
+      p = layer palette (*0x100)
+      P = tile palette (*0x40)
+      C = pixel color
+  ***/
+static const uint32 atex_table_cyclone[] =
+{
+  0x000,
+  0x040,
+  0x080,
+  0x0c0,
+  0x200,
+  0x240,
+  0x280,
+  0x2c0,
+};
+
 /* fixed Master System palette for Modes 0,1,2,3 */
 static const uint8 tms_crom[16] =
 {
@@ -578,6 +638,7 @@ static uint32 bp_lut[0x10000];
 
 /* Layer priority pixel look-up tables */
 static uint8 lut[LUT_MAX][LUT_SIZE];
+static uint16 lut_cyclone[LUT_MAX][LUT_SIZE_CYCLONE];
 
 /* Output pixel data look-up tables*/
 static PIXEL_OUT_T pixel[64*8]; /*** cyclone mode needs more colors ***/
@@ -588,7 +649,7 @@ static PIXEL_OUT_T pixel_lut_m4[0x40];
 static uint8 linebuf[2][0x200];
 
 /*** cyclone mode line buffers ***/
-/*** values 0x000-0x1ff are 6bpp pixels, everything else is a bitmap mode pixel ***/
+/*** values 0x000-0x7ff are 6bpp pixels, everything else is a bitmap mode pixel ***/
 static uint32 linebuf_cyclone[2][0x200];
 
 /*** cyclone bitmap mode YUV -> pixel conversion lut ***/
@@ -727,6 +788,24 @@ static uint32 make_lut_bg(uint32 bx, uint32 ax)
   if((c & 0x0F) == 0x00) c &= 0x80;
 
   return (c);
+}
+
+/*** cyclone-extended luts have the same logic, but need 9 bits for color instead of 6 ***/
+static uint32 make_lut_bg_cyclone(uint32 bx, uint32 ax)
+{
+  int bf = (bx & 0x3ff);
+  int bp = (bx & 0x200);
+  int b  = (bx & 0x3f);
+  
+  int af = (ax & 0x3ff);
+  int ap = (ax & 0x200);
+  int a  = (ax & 0x3f);
+
+  int c = (ap ? (a ? af : bf) : (bp ? (b ? bf : af) : (a ? af : bf)));
+  
+  if (!(c & 0x3f)) c = 0;
+  
+  return c;
 }
 
 /* Input (bx):  d5-d0=color, d6=priority, d7=unused */
@@ -974,6 +1053,27 @@ INLINE void merge(uint8 *srca, uint8 *srcb, uint8 *dst, uint8 *table, int width)
   while (--width);
 }
 
+INLINE void merge_cyclone(uint32 *srca, uint32 *srcb, uint32 *dst, uint16 *table, int width)
+{
+  do
+  {
+    uint32 a = *srca++;
+    uint32 b = *srcb++;
+    if (b >= 0x800) /*** bitmap pixels always have lower priority ***/
+    {
+      if (!(a & 0x3f))
+        *dst++ = b;
+      else
+        *dst++ = a;
+    }
+    else
+    {
+      *dst++ = table[(b << 11) | (a)];
+    }
+  }
+  while (--width);
+}
+
 
 /*--------------------------------------------------------------------------*/
 /* Pixel color lookup tables initialization                                 */
@@ -1184,6 +1284,29 @@ void color_update_m5(int index, unsigned int data)
     pixel[0x00 | index] = data;
     pixel[0x40 | index] = data;
     pixel[0x80 | index] = data;
+  }
+}
+
+
+/*** extended ***/
+void color_update_cyclone(int index, unsigned int data)
+{
+  int pixel_index = index >> 1;
+  int pixel_word = index & 1;
+  
+  /***
+    if word == 0:
+      the data is GGRR
+    if word == 1:
+      the data is __BB
+    ***/
+  if (!pixel_word)
+  {
+    pixel[pixel_index] = MAKE_PIXEL_CYCLONE(data&0xff, data>>8, pixel[pixel_index]&0xff);
+  }
+  else
+  {
+    pixel[pixel_index] = MAKE_PIXEL_CYCLONE((pixel[pixel_index]>>16)&0xff, (pixel[pixel_index]>>8)&0xff, data & 0xff);
   }
 }
 
@@ -2942,13 +3065,173 @@ void render_bg_m5_im2_vs(int line)
 
 
 
-/*** todo cyclone bg ***/
 void render_bg_cyclone(int line)
 {
-  pixel[0x10] = MAKE_PIXEL_CYCLONE(line,0,0);
-  
-  for (int i = 0; i < 0x200; i++)
-    linebuf_cyclone[0][i] = 0x10;
+  int column;
+  uint32 atex, atbuf, *dst;
+  uint8 *src;
+
+  /* Common data */
+  uint32 xscroll      = *(uint32 *)&vram[hscb + ((line & hscroll_mask) << 2)];
+  uint32 yscroll      = *(uint32 *)&vsram[0];
+  uint32 pf_col_mask  = playfield_col_mask;
+  uint32 pf_row_mask  = playfield_row_mask;
+  uint32 pf_shift     = playfield_shift;
+
+  /* Window & Plane A */
+  int a = (reg[18] & 0x1F) << 3;
+  int w = (reg[18] >> 7) & 1;
+
+  /* Plane B width */
+  int start = 0;
+  int end = bitmap.viewport.w >> 4;
+
+  /* Plane B scroll */
+#ifdef LSB_FIRST
+  uint32 shift  = (xscroll >> 16) & 0x0F;
+  uint32 index  = pf_col_mask + 1 - ((xscroll >> 20) & pf_col_mask);
+  uint32 v_line = (line + (yscroll >> 16)) & pf_row_mask;
+#else
+  uint32 shift  = (xscroll & 0x0F);
+  uint32 index  = pf_col_mask + 1 - ((xscroll >> 4) & pf_col_mask);
+  uint32 v_line = (line + yscroll) & pf_row_mask;
+#endif
+
+  /* Plane B name table */
+  uint32 *nt = (uint32 *)&vram[ntbb + (((v_line >> 3) << pf_shift) & 0x1FC0)];
+
+  /* Pattern row index */
+  v_line = (v_line & 7) << 3;
+
+  if(shift)
+  {
+    /* Plane B line buffer */
+    dst = (uint32 *)&linebuf_cyclone[0][0x10 + shift];
+
+    atbuf = nt[(index - 1) & pf_col_mask];
+    DRAW_COLUMN_CYCLONE(atbuf, v_line, bpalbase)
+  }
+  else
+  {
+    /* Plane B line buffer */
+    dst = (uint32 *)&linebuf_cyclone[0][0x20];
+  }
+
+  for(column = 0; column < end; column++, index++)
+  {
+    atbuf = nt[index & pf_col_mask];
+    DRAW_COLUMN_CYCLONE(atbuf, v_line, bpalbase)
+  }
+
+  if (w == (line >= a))
+  {
+    /* Window takes up entire line */
+    a = 0;
+    w = 1;
+  }
+  else
+  {
+    /* Window and Plane A share the line */
+    a = clip[0].enable;
+    w = clip[1].enable;
+  }
+
+  /* Plane A */
+  if (a)
+  {
+    /* Plane A width */
+    start = clip[0].left;
+    end   = clip[0].right;
+
+    /* Plane A scroll */
+#ifdef LSB_FIRST
+    shift   = (xscroll & 0x0F);
+    index   = pf_col_mask + start + 1 - ((xscroll >> 4) & pf_col_mask);
+    v_line  = (line + yscroll) & pf_row_mask;
+#else
+    shift   = (xscroll >> 16) & 0x0F;
+    index   = pf_col_mask + start + 1 - ((xscroll >> 20) & pf_col_mask);
+    v_line  = (line + (yscroll >> 16)) & pf_row_mask;
+#endif
+
+    /* Plane A name table */
+    nt = (uint32 *)&vram[ntab + (((v_line >> 3) << pf_shift) & 0x1FC0)];
+
+    /* Pattern row index */
+    v_line = (v_line & 7) << 3;
+
+    if(shift)
+    {
+      /* Plane A line buffer */
+      dst = (uint32 *)&linebuf_cyclone[1][0x10 + shift + (start << 4)];
+
+      /* Window bug */
+      if (start)
+      {
+        atbuf = nt[index & pf_col_mask];
+      }
+      else
+      {
+        atbuf = nt[(index - 1) & pf_col_mask];
+      }
+
+      DRAW_COLUMN_CYCLONE(atbuf, v_line, apalbase)
+    }
+    else
+    {
+      /* Plane A line buffer */
+      dst = (uint32 *)&linebuf_cyclone[1][0x20 + (start << 4)];
+    }
+
+    for(column = start; column < end; column++, index++)
+    {
+      atbuf = nt[index & pf_col_mask];
+      DRAW_COLUMN_CYCLONE(atbuf, v_line, apalbase)
+    }
+
+    /* Window width */
+    start = clip[1].left;
+    end   = clip[1].right;
+  }
+
+  /* Window */
+  if (w)
+  {
+    /* Window name table */
+    nt = (uint32 *)&vram[ntwb | ((line >> 3) << (6 + (reg[12] & 1)))];
+
+    /* Pattern row index */
+    v_line = (line & 7) << 3;
+
+    /* Plane A line buffer */
+    dst = (uint32 *)&linebuf_cyclone[1][0x20 + (start << 4)];
+
+    for(column = start; column < end; column++)
+    {
+      atbuf = nt[column];
+      DRAW_COLUMN_CYCLONE(atbuf, v_line, wpalbase)
+    }
+  }
+
+  /* Merge background layers */
+  merge_cyclone(&linebuf_cyclone[1][0x20], &linebuf_cyclone[0][0x20], &linebuf_cyclone[0][0x20], lut_cyclone[(reg[12] & 0x08) >> 2], bitmap.viewport.w);
+}
+
+
+/*** todo all these ***/
+void render_bg_cyclone_vs(int line)
+{
+  render_bg_cyclone(line);
+}
+
+void render_bg_cyclone_im2(int line)
+{
+  render_bg_cyclone(line);
+}
+
+void render_bg_cyclone_im2_vs(int line)
+{
+  render_bg_cyclone(line);
 }
 
 
@@ -2985,8 +3268,8 @@ void render_bg_cyclone_bitmap(int line)
       vr = (box >> 15) & 0x1f;
     }
     
-    *(dst++) = ((y<<11)|(u<<5)|vl) + 0x200;
-    *(dst++) = ((y<<11)|(u<<5)|vr) + 0x200;
+    *(dst++) = ((y<<11)|(u<<5)|vl) + 0x800;
+    *(dst++) = ((y<<11)|(u<<5)|vr) + 0x800;
     
     src += 4;
   }
@@ -3704,6 +3987,30 @@ void render_obj_m5_im2_ste(int line)
 }
 
 
+/*** todo all these ***/
+void render_obj_cyclone(int line)
+{
+  
+}
+
+void render_obj_cyclone_ste(int line)
+{
+  
+}
+
+void render_obj_cyclone_im2(int line)
+{
+  
+}
+
+void render_obj_cyclone_im2_ste(int line)
+{
+  
+}
+
+
+
+
 /*--------------------------------------------------------------------------*/
 /* Sprites Parsing functions                                                */
 /*--------------------------------------------------------------------------*/
@@ -4216,12 +4523,11 @@ void render_init(void)
   int bx, ax;
 
   /* Initialize layers priority pixel look-up tables */
-  uint16 index;
   for (bx = 0; bx < 0x100; bx++)
   {
     for (ax = 0; ax < 0x100; ax++)
     {
-      index = (bx << 8) | (ax);
+      uint16 index = (bx << 8) | (ax);
 
       lut[0][index] = make_lut_bg(bx, ax);
       lut[1][index] = make_lut_bgobj(bx, ax);
@@ -4229,6 +4535,18 @@ void render_init(void)
       lut[3][index] = make_lut_obj(bx, ax);
       lut[4][index] = make_lut_bgobj_ste(bx, ax);
       lut[5][index] = make_lut_bgobj_m4(bx,ax);
+    }
+  }
+  
+  /*** and for cyclone ***/
+  for (bx = 0; bx < 0x800; bx++)
+  {
+    for (ax = 0; ax < 0x800; ax++)
+    {
+      uint32 index = (bx << 11) | (ax);
+
+      /*** todo the rest of these ***/
+      lut_cyclone[0][index] = make_lut_bg_cyclone(bx, ax);
     }
   }
 
@@ -4395,8 +4713,8 @@ void remap_line(int line)
       do
       {
         uint32 v = *(src++);
-        if (v < 0x200) *(dst++) = pixel[v];
-        else *(dst++) = cyclone_bitmap_lut[v-0x200];
+        if (v < 0x800) *(dst++) = pixel[v];
+        else *(dst++) = cyclone_bitmap_lut[v-0x800];
       } while (--width);
     }
     else
