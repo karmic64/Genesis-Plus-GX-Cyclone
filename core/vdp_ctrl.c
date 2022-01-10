@@ -3257,7 +3257,14 @@ static void vdp_dma_68k_ext(unsigned int length)
     source += 2;
 
     /* 128k DMA window */
-    source = (reg[23] << 17) | (source & 0x1FFFF);
+    if (CYCLONE_ENABLED) /*** this is fixed in cyclone mode ***/
+    {
+      if (!(source & 0x1ffff)) reg[23]++;
+    }
+    else
+    {
+      source = (reg[23] << 17) | (source & 0x1FFFF);
+    }
 
     /* Write data word to VRAM, CRAM or VSRAM */
     vdp_bus_w(data);
@@ -3285,7 +3292,14 @@ static void vdp_dma_68k_ram(unsigned int length)
     source += 2;
 
     /* 128k DMA window */
-    source = (reg[23] << 17) | (source & 0x1FFFF);
+    if (CYCLONE_ENABLED) /*** this is fixed in cyclone mode ***/
+    {
+      if (!(source & 0x1ffff)) reg[23]++;
+    }
+    else
+    {
+      source = (reg[23] << 17) | (source & 0x1FFFF);
+    }
 
     /* Write data word to VRAM, CRAM or VSRAM */
     vdp_bus_w(data);
@@ -3333,7 +3347,14 @@ static void vdp_dma_68k_io(unsigned int length)
     source += 2;
 
     /* 128k DMA window */
-    source = (reg[23] << 17) | (source & 0x1FFFF);
+    if (CYCLONE_ENABLED) /*** this is fixed in cyclone mode ***/
+    {
+      if (!(source & 0x1ffff)) reg[23]++;
+    }
+    else
+    {
+      source = (reg[23] << 17) | (source & 0x1FFFF);
+    }
 
     /* Write data to VRAM, CRAM or VSRAM */
     vdp_bus_w(data);

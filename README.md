@@ -15,6 +15,7 @@ The following issues exist due to lack of testing:
 * Not sure if cyclone mode requires the M5 bit to be set in register #1. Currently it does.
 * Not sure how shadow/highlight works in cyclone mode. Currently it has no effect.
 * Not sure what happens when cyclone mode is turned off then back on again when the background color register is >$40. Currently the value will just be masked with $3f by turning it off.
+
 "I know how it works but just haven't implemented it yet" things are not listed here.
 
 # Original readme
