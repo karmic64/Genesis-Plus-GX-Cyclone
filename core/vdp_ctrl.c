@@ -553,7 +553,7 @@ int vdp_context_load(uint8 *state)
     status = (status & ~1) | vdp_pal;
   }
 
-  if (reg[1] & 0x04)
+  if (CYCLONE_ENABLED || reg[1] & 0x04)
   {
     /* Mode 5 */
     bg_list_index = 0x800;
@@ -751,7 +751,7 @@ void vdp_68k_ctrl_w(unsigned int data)
     else
     {
       /* Set pending flag (Mode 5 only) */
-      pending = reg[1] & 4;
+      pending = (CYCLONE_ENABLED || reg[1] & 4) ? 4 : 0;
     }
 
     /* Update address and code registers */
@@ -906,7 +906,7 @@ void vdp_z80_ctrl_w(unsigned int data)
       }
 
       /* Set Mode 5 pending flag  */
-      pending = (reg[1] & 4) >> 1;
+      pending = ((CYCLONE_ENABLED || reg[1] & 4) ? 4 : 0) >> 1;
 
       if (!pending && !(code & 0x03))
       {
@@ -1373,7 +1373,7 @@ unsigned int vdp_hvc_r(unsigned int cycles)
   if (data)
   {
     /* Mode 5: HV counters are frozen (cf. lightgun games, Sunset Riders logo) */
-    if (reg[1] & 0x04)
+    if (CYCLONE_ENABLED || reg[1] & 0x04)
     {
 #ifdef LOGVDP
       error("[%d(%d)][%d(%d)] HVC latch read -> 0x%x (%x)\n", v_counter, (v_counter + (cycles - mcycles_vdp)/MCYCLES_PER_LINE)%lines_per_frame, cycles, cycles%MCYCLES_PER_LINE, data & 0xffff, m68k_get_reg(M68K_REG_PC));
@@ -1494,7 +1494,7 @@ int vdp_68k_irq_ack(int int_level)
 static void update_md_rendering_mode(unsigned int cycles)
 {
   int i;
-  if (reg[1] & 0x04)
+  if (CYCLONE_ENABLED || reg[1] & 0x04)
   {
     /* Mode 5 rendering */
     parse_satb = parse_satb_m5;
@@ -1605,7 +1605,7 @@ static void update_md_rendering_mode(unsigned int cycles)
   }
 
   /* Update vertical counter max value */
-  vc_max = vc_table[(reg[1] >> 2) & 3][vdp_pal];
+  vc_max = vc_table[((reg[1] >> 2) | (CYCLONE_ENABLED ? 1 : 0)) & 3][vdp_pal];
 
   /* Display height change should be applied on next frame */
   bitmap.viewport.changed |= 2; 
@@ -1620,7 +1620,8 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
 #endif
 
   /* VDP registers #11 to #23 cannot be updated in Mode 4 (Captain Planet & Avengers, Bass Master Classic Pro Edition) */
-  if (!(reg[1] & 4) && (r > 10))
+  /*** cyclone register is always writeable ***/
+  if (!CYCLONE_ENABLED && !(reg[1] & 4) && (r > 10) && (r != 0x18))
   {
     return;
   }
@@ -1701,7 +1702,7 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         {
           /* Reset color palette */
           int i;
-          if (reg[1] & 0x04)
+          if (CYCLONE_ENABLED || reg[1] & 0x04)
           {
             if (CYCLONE_ENABLED)
             {
@@ -1741,7 +1742,7 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         if (system_hw & SYSTEM_MD)
         {
           /* Mode 5 only */
-          if (reg[1] & 0x04)
+          if (CYCLONE_ENABLED || reg[1] & 0x04)
           {
             if (d & 0x02)
             {
@@ -1878,7 +1879,7 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         if (system_hw & SYSTEM_MD)
         {
           /* Mode 5 only */
-          if (d & 0x04)
+          if (CYCLONE_ENABLED || d & 0x04)
           {
             /* Changes should be applied on next frame */
             bitmap.viewport.changed |= 2;
@@ -1987,7 +1988,7 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         /*** border = d; ***/
 
         /* Reset palette entry */
-        if (reg[1] & 4)
+        if (CYCLONE_ENABLED || reg[1] & 4)
         {
           if (CYCLONE_ENABLED)
           {

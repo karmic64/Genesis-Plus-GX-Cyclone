@@ -12,12 +12,12 @@ The following issues exist due to lack of testing:
 * Not sure how bitmap mode works in 32-column mode. Currently the rightmost 8 columns are just cut off, but it may "reinterpret" the bitmap data so that each row is only 256 bytes long.
 * I assume that bitmap mode requires both bits 7 and 6 in register $18 to be activated. It might just need bit 6.
 * Not sure what happens when cyclone mode is turned off when a VDP address is >$10000. Currently I just AND the current address with $ffff.
-* Not sure if cyclone mode requires the M5 bit to be set in register #1. Currently it does.
+* Not sure if cyclone mode requires the M5 bit to be set in register #1. Currently it does not.
+  * The games try doing DMA with the cyclone bit on and M5 bit off, and they will be glitched if cyclone mode requires both bits to be set.
 * Not sure how shadow/highlight works in cyclone mode. Currently it has no effect.
 * Not sure what happens when cyclone mode is turned off then back on again when the background color register is >$40. Currently the value will just be masked with $3f by turning it off.
 
 The following emulation issues exist:
-* A lot of title screens won't show up on the first run, and the game needs to start and come back for it to be actually visible.
 * Jack's Pea has flickering scrolling. The jerkiness is in the original, though.
 * After losing a game of Cross the Road, BG A (the logo and cloud surrouding "press start") is not centered.
 * The sound samples which sound weird on the actual console sound OK in the emulator. Kind of seems like an anti-fix, so I probably won't change it.
