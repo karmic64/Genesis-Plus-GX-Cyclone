@@ -298,6 +298,7 @@ INLINE void WRITE_LONG(void *address, uint32 data)
   GET_MSB_TILE_CYCLONE(ATTR, LINE) \
   for (int pix = 0; pix < 8; pix++) { \
     *dst++ = (src[pix] | atex | PALBASE); \
+  } \
   GET_LSB_TILE_CYCLONE(ATTR, LINE) \
   for (int pix = 0; pix < 8; pix++) { \
     *dst++ = (src[pix] | atex | PALBASE); \
@@ -585,7 +586,7 @@ static const uint32 atex_table[] =
       P = tile palette (*0x40)
       C = pixel color
   ***/
-static const uint32 atex_table_cyclone[] =
+static const uint16 atex_table_cyclone[] =
 {
   0x000,
   0x040,

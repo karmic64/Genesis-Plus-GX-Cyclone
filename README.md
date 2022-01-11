@@ -18,6 +18,13 @@ The following issues exist due to lack of testing:
 
 "I know how it works but just haven't implemented it yet" things are not listed here.
 
+The following emulation issues exist:
+* A lot of title screens won't show up on the first run, and the game needs to start and come back for it to be actually visible.
+* Jack's Pea has flickering scrolling. The jerkiness is in the original, though.
+* In Jack's Pea's title screen, BG A (the "JACK'S PEA" logo) is too high.
+
+Despite the issues, all the games are at least playable.
+
 # Original readme
 
 Genesis Plus GX is an open-source Sega 8/16 bit emulator focused on accuracy and portability. Initially ported and developped on Gamecube / Wii consoles through [libogc / devkitPPC](http://sourceforge.net/projects/devkitpro/), this emulator is now available on many other platforms through various frontends such as:
