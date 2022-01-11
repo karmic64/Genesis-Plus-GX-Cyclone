@@ -16,12 +16,11 @@ The following issues exist due to lack of testing:
 * Not sure how shadow/highlight works in cyclone mode. Currently it has no effect.
 * Not sure what happens when cyclone mode is turned off then back on again when the background color register is >$40. Currently the value will just be masked with $3f by turning it off.
 
-"I know how it works but just haven't implemented it yet" things are not listed here.
-
 The following emulation issues exist:
 * A lot of title screens won't show up on the first run, and the game needs to start and come back for it to be actually visible.
 * Jack's Pea has flickering scrolling. The jerkiness is in the original, though.
 * In Jack's Pea's title screen, BG A (the "JACK'S PEA" logo) is too high.
+* The sound samples which sound weird on the actual console sound OK in the emulator. Kind of seems like an anti-fix, so I probably won't change it.
 
 Despite the issues, all the games are at least playable.
 
