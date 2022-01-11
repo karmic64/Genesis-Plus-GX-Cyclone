@@ -19,7 +19,7 @@ The following issues exist due to lack of testing:
 The following emulation issues exist:
 * A lot of title screens won't show up on the first run, and the game needs to start and come back for it to be actually visible.
 * Jack's Pea has flickering scrolling. The jerkiness is in the original, though.
-* In Jack's Pea's title screen, BG A (the "JACK'S PEA" logo) is too high.
+* After losing a game of Cross the Road, BG A (the logo and cloud surrouding "press start") is not centered.
 * The sound samples which sound weird on the actual console sound OK in the emulator. Kind of seems like an anti-fix, so I probably won't change it.
 
 Despite the issues, all the games are at least playable.
