@@ -358,15 +358,31 @@ void system_frame_gen(int do_skip)
       /* update rendering mode */
       if (reg[1] & 0x04)
       {
-        if (im2_flag)
+        if (reg[0x18] & 0x18)
         {
-          render_bg = (reg[11] & 0x04) ? render_bg_m5_im2_vs : render_bg_m5_im2;
-          render_obj = (reg[12] & 0x08) ? render_obj_m5_im2_ste : render_obj_m5_im2;
+          if (im2_flag)
+          {
+            render_bg = (reg[11] & 0x04) ? render_bg_cyclone_im2_vs : render_bg_cyclone_im2;
+            render_obj = (reg[12] & 0x08) ? render_obj_cyclone_im2_ste : render_obj_cyclone_im2;
+          }
+          else
+          {
+            render_bg = (reg[11] & 0x04) ? render_bg_cyclone_vs : render_bg_cyclone;
+            render_obj = (reg[12] & 0x08) ? render_obj_cyclone_ste : render_obj_cyclone;
+          }
         }
         else
         {
-          render_bg = (reg[11] & 0x04) ? render_bg_m5_vs : render_bg_m5;
-          render_obj = (reg[12] & 0x08) ? render_obj_m5_ste : render_obj_m5;
+          if (im2_flag)
+          {
+            render_bg = (reg[11] & 0x04) ? render_bg_m5_im2_vs : render_bg_m5_im2;
+            render_obj = (reg[12] & 0x08) ? render_obj_m5_im2_ste : render_obj_m5_im2;
+          }
+          else
+          {
+            render_bg = (reg[11] & 0x04) ? render_bg_m5_vs : render_bg_m5;
+            render_obj = (reg[12] & 0x08) ? render_obj_m5_ste : render_obj_m5;
+          }
         }
       }
     }
