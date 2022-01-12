@@ -4942,7 +4942,7 @@ void render_reset(void)
 /* Line rendering functions                                                 */
 /*--------------------------------------------------------------------------*/
 
-#define CYCLONE_ENABLED ((reg[1] & 4) && (reg[0x18] & 0x80))
+#define CYCLONE_ENABLED (reg[0x18] & 0x80)
 
 void render_line(int line)
 {

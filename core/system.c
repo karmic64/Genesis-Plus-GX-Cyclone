@@ -356,9 +356,9 @@ void system_frame_gen(int do_skip)
       bitmap.viewport.changed = 5;
 
       /* update rendering mode */
-      if (reg[1] & 0x04)
+      if (reg[0x18] & 0x80 || reg[1] & 0x04)
       {
-        if (reg[0x18] & 0x18)
+        if (reg[1] & 0x80)
         {
           if (im2_flag)
           {
@@ -393,7 +393,7 @@ void system_frame_gen(int do_skip)
     }
 
     /* active screen height */
-    if (reg[1] & 0x04)
+    if (reg[0x18] & 0x80 || reg[1] & 0x04)
     {
       /* Mode 5 */
       if (reg[1] & 0x08)
