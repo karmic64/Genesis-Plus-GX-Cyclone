@@ -360,15 +360,22 @@ void system_frame_gen(int do_skip)
       {
         if (reg[1] & 0x80)
         {
-          if (im2_flag)
+          if (reg[0x18] & 0x40)
           {
-            render_bg = (reg[11] & 0x04) ? render_bg_cyclone_im2_vs : render_bg_cyclone_im2;
-            render_obj = (reg[12] & 0x08) ? render_obj_cyclone_im2_ste : render_obj_cyclone_im2;
+            render_bg = render_bg_cyclone_bitmap;
           }
           else
           {
-            render_bg = (reg[11] & 0x04) ? render_bg_cyclone_vs : render_bg_cyclone;
-            render_obj = (reg[12] & 0x08) ? render_obj_cyclone_ste : render_obj_cyclone;
+            if (im2_flag)
+            {
+              render_bg = (reg[11] & 0x04) ? render_bg_cyclone_im2_vs : render_bg_cyclone_im2;
+              render_obj = (reg[12] & 0x08) ? render_obj_cyclone_im2_ste : render_obj_cyclone_im2;
+            }
+            else
+            {
+              render_bg = (reg[11] & 0x04) ? render_bg_cyclone_vs : render_bg_cyclone;
+              render_obj = (reg[12] & 0x08) ? render_obj_cyclone_ste : render_obj_cyclone;
+            }
           }
         }
         else

@@ -465,6 +465,14 @@ int vdp_context_save(uint8 *state)
   save_param(cram_cyclone, sizeof(cram_cyclone));
   save_param(vsram, sizeof(vsram));
   save_param(reg, sizeof(reg));
+  
+  /*** in cyclone mode vdp pointer regs act differently so we need to save the addresses themselves ***/
+  save_param(&ntab, sizeof(ntab));
+  save_param(&ntbb, sizeof(ntbb));
+  save_param(&ntwb, sizeof(ntwb));
+  save_param(&satb, sizeof(satb));
+  save_param(&hscb, sizeof(hscb));
+  
   save_param(&addr, sizeof(addr));
   save_param(&addr_latch, sizeof(addr_latch));
   save_param(&code, sizeof(code));
@@ -521,12 +529,20 @@ int vdp_context_load(uint8 *state)
   }
   else
   {
+    reg[0x18] = ~temp_reg[0x18]; /*** mark all bits as changed ***/
+    vdp_reg_w(0x18, temp_reg[0x18], 0); /*** update cyclone reg first ***/
     for (i=0;i<0x18;i++) 
     {
-      if (i == 2) vdp_reg_w(0x18, temp_reg[0x18] ,0); /*** update cyclone after updating m5 ***/
+      reg[i] = ~temp_reg[i];
       vdp_reg_w(i, temp_reg[i], 0);
     }
   }
+  
+  load_param(&ntab, sizeof(ntab));
+  load_param(&ntbb, sizeof(ntbb));
+  load_param(&ntwb, sizeof(ntwb));
+  load_param(&satb, sizeof(satb));
+  load_param(&hscb, sizeof(hscb));
 
   load_param(&addr, sizeof(addr));
   load_param(&addr_latch, sizeof(addr_latch));
@@ -2062,13 +2078,20 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
       /* Vertical Scrolling mode */
       if (CYCLONE_ENABLED)
       {
-        if (d & 0x04)
+        if (reg[0x18] & 0x40)
         {
-          render_bg = im2_flag ? render_bg_cyclone_im2_vs : render_bg_cyclone_vs;
+          render_bg = render_bg_cyclone_bitmap;
         }
         else
         {
-          render_bg = im2_flag ? render_bg_cyclone_im2 : render_bg_cyclone;
+          if (d & 0x04)
+          {
+            render_bg = im2_flag ? render_bg_cyclone_im2_vs : render_bg_cyclone_vs;
+          }
+          else
+          {
+            render_bg = im2_flag ? render_bg_cyclone_im2 : render_bg_cyclone;
+          }
         }
       }
       else
