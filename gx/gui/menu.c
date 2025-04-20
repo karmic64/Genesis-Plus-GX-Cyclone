@@ -3,7 +3,7 @@
  *
  *  Genesis Plus GX menu
  *
- *  Copyright Eke-Eke (2009-2021)
+ *  Copyright Eke-Eke (2009-2023)
  *
  *  Redistribution and use of this code or any derivative works are permitted
  *  provided that the following conditions are met:
@@ -381,16 +381,20 @@ static gui_item items_rompaths[] =
 static gui_item items_system[] =
 {
   {NULL,NULL,"System: MEGA DRIVE/GENESIS", "Select system hardware model",                56,132,276,48},
-  {NULL,NULL,"Region: JAPAN",             "Select system region",                        56,132,276,48},
+  {NULL,NULL,"Region: JAPAN",              "Select system region",                        56,132,276,48},
   {NULL,NULL,"VDP Mode: AUTO",             "Select VDP mode",                             56,132,276,48},
   {NULL,NULL,"System Clock: AUTO",         "Select master clock frequency",               56,132,276,48},
   {NULL,NULL,"System Boot: BIOS->CART",    "Select system booting method",                56,132,276,48},
   {NULL,NULL,"System Lockups: OFF",        "Enable/Disable original system lockups",      56,132,276,48},
   {NULL,NULL,"68k Address Error: OFF",     "Enable/Disable 68k address error exceptions", 56,132,276,48},
+  {NULL,NULL,"CD Access Time: OFF",        "Enable/Disable CD read/seek latency",         56,132,276,48},
   {NULL,NULL,"CD Add-on: MEGA/SEGA CD",    "Select cartridge mode CD hardware add-on",    56,132,276,48},
   {NULL,NULL,"Lock-On: SONIC&KNUCKLES",    "Select Lock-On cartridge type",               56,132,276,48},
   {NULL,NULL,"Cartridge Swap: OFF",        "Enable/Disable cartridge hot swap",           56,132,276,48},
   {NULL,NULL,"BIOS & Lock-On ROM paths",   "Configure Boot ROM & Lock-On ROM paths",      56,132,276,48},
+  {NULL,NULL,"Main 68k Overclock: 3.0x",   "Adjust Mega Drive /Genesis CPU clock speed",  56,132,276,48},
+  {NULL,NULL,"Sub 68k Overclock: 3.0x",    "Adjust Sega CD / Mega-CD CPU clock speed",    56,132,276,48},
+  {NULL,NULL,"Z80 Overclock: 3.0x",        "Adjust Z80 CPU clock speed",                  56,132,276,48},
   {NULL,NULL,"SVP Cycles: 1500",           "Adjust SVP chip emulation speed",             56,132,276,48}
 };
 
@@ -1296,6 +1300,8 @@ static void systemmenu ()
     sprintf (items[0].text, "System: SG-1000");
   else if (config.system == SYSTEM_SGII)
     sprintf (items[0].text, "System: SG-1000 II");
+  else if (config.system == SYSTEM_SGII_RAM_EXT)
+    sprintf (items[0].text, "System: SG-1000 + RAM EXT.");
   else if (config.system == SYSTEM_MARKIII)
     sprintf (items[0].text, "System: MARK-III");
   else if (config.system == SYSTEM_SMS)
@@ -1333,35 +1339,51 @@ static void systemmenu ()
   sprintf (items[4].text, "System Boot: %s", (config.bios & 1) ? ((config.bios & 2) ? "BIOS->CART" : "BIOS ONLY") : "CART");
   sprintf (items[5].text, "System Lockups: %s", config.force_dtack ? "OFF" : "ON");
   sprintf (items[6].text, "68k Address Error: %s", config.addr_error ? "ON" : "OFF");
+  sprintf (items[7].text, "CD Access Time: %s", config.cd_latency ? "ON" : "OFF");
 
   if (config.add_on == HW_ADDON_AUTO)
-    sprintf (items[7].text, "CD Add-on: AUTO");
+    sprintf (items[8].text, "CD Add-on: AUTO");
   else if (config.add_on == HW_ADDON_MEGACD)
-    sprintf (items[7].text, "CD Add-on: MEGA/SEGA CD");
+    sprintf (items[8].text, "CD Add-on: MEGA/SEGA CD");
   else if (config.add_on == HW_ADDON_MEGASD)
-    sprintf (items[7].text, "CD Add-on: MEGASD");
+    sprintf (items[8].text, "CD Add-on: MEGASD");
   else
-    sprintf (items[7].text, "CD Add-on: NONE");
+    sprintf (items[8].text, "CD Add-on: NONE");
 
   if (config.lock_on == TYPE_GG)
-    sprintf (items[8].text, "Lock-On: GAME GENIE");
+    sprintf (items[9].text, "Lock-On: GAME GENIE");
   else if (config.lock_on == TYPE_AR)
-    sprintf (items[8].text, "Lock-On: ACTION REPLAY");
+    sprintf (items[9].text, "Lock-On: ACTION REPLAY");
   else if (config.lock_on == TYPE_SK)
-    sprintf (items[8].text, "Lock-On: SONIC&KNUCKLES");
+    sprintf (items[9].text, "Lock-On: SONIC&KNUCKLES");
   else
-    sprintf (items[8].text, "Lock-On: OFF");
+    sprintf (items[9].text, "Lock-On: OFF");
 
-  sprintf (items[9].text, "Cartridge Swap: %s", (config.hot_swap & 1) ? "ON":"OFF");
+  sprintf (items[10].text, "Cartridge Swap: %s", (config.hot_swap & 1) ? "ON":"OFF");
+
+  if (config.m68k_overclock > 1.0)
+    sprintf (items[12].text, "Main 68k Overclock: %1.1fx", config.m68k_overclock);
+  else
+    sprintf (items[12].text, "Main 68k Overclock: OFF");
+
+  if (config.s68k_overclock > 1.0)
+    sprintf (items[13].text, "Sub 68k Overclock: %1.1fx", config.s68k_overclock);
+  else
+    sprintf (items[13].text, "Sub 68k Overclock: OFF");
+
+  if (config.z80_overclock > 1.0)
+    sprintf (items[14].text, "Z80 Overclock: %1.1fx", config.z80_overclock);
+  else
+    sprintf (items[14].text, "Z80 Overclock: OFF");
 
   if (svp)
   {
-    sprintf (items[11].text, "SVP Cycles: %d", SVP_cycles);
-    m->max_items = 12;
+    sprintf (items[15].text, "SVP Cycles: %d", SVP_cycles);
+    m->max_items = 16;
   }
   else
   {
-    m->max_items = 11;
+    m->max_items = 15;
   }
 
   GUI_InitMenu(m);
@@ -1396,6 +1418,12 @@ static void systemmenu ()
           if (system_hw) system_hw = SYSTEM_SGII;
         }
         else if (config.system == SYSTEM_SGII)
+        {
+          config.system = SYSTEM_SGII_RAM_EXT;
+          sprintf (items[0].text, "System: SG-1000 + RAM EXT.");
+          if (system_hw) system_hw = SYSTEM_SGII_RAM_EXT;
+        }
+        else if (config.system == SYSTEM_SGII_RAM_EXT)
         {
           config.system = SYSTEM_MARKIII;
           sprintf (items[0].text, "System: MARK-III");
@@ -1552,31 +1580,38 @@ static void systemmenu ()
         break;
       }
 
-      case 7:  /*** CD add-on ***/
+      case 7:  /*** CD Access Time ***/
       {
-        config.add_on = (config.add_on + 1) % (HW_ADDON_NONE + 1);
-        if (config.add_on == HW_ADDON_AUTO)
-          sprintf (items[7].text, "CD Add-on: AUTO");
-        else if (config.add_on == HW_ADDON_MEGACD)
-          sprintf (items[7].text, "CD Add-on: MEGA/SEGA CD");
-        else if (config.add_on == HW_ADDON_MEGASD)
-          sprintf (items[7].text, "CD Add-on: MEGASD");
-        else
-          sprintf (items[7].text, "CD Add-on: NONE");
+        config.cd_latency ^= 1;
+        sprintf (items[7].text, "CD Access Time: %s", config.cd_latency ? "ON" : "OFF");
         break;
       }
 
-      case 8:  /*** Cart Lock-On ***/
+      case 8:  /*** CD add-on ***/
+      {
+        config.add_on = (config.add_on + 1) % (HW_ADDON_NONE + 1);
+        if (config.add_on == HW_ADDON_AUTO)
+          sprintf (items[8].text, "CD Add-on: AUTO");
+        else if (config.add_on == HW_ADDON_MEGACD)
+          sprintf (items[8].text, "CD Add-on: MEGA/SEGA CD");
+        else if (config.add_on == HW_ADDON_MEGASD)
+          sprintf (items[8].text, "CD Add-on: MEGASD");
+        else
+          sprintf (items[8].text, "CD Add-on: NONE");
+        break;
+      }
+
+      case 9:  /*** Cart Lock-On ***/
       {
         config.lock_on = (config.lock_on + 1) % (TYPE_SK + 1);
         if (config.lock_on == TYPE_GG)
-          sprintf (items[8].text, "Lock-On: GAME GENIE");
+          sprintf (items[9].text, "Lock-On: GAME GENIE");
         else if (config.lock_on == TYPE_AR)
-          sprintf (items[8].text, "Lock-On: ACTION REPLAY");
+          sprintf (items[9].text, "Lock-On: ACTION REPLAY");
         else if (config.lock_on == TYPE_SK)
-          sprintf (items[8].text, "Lock-On: SONIC&KNUCKLES");
+          sprintf (items[9].text, "Lock-On: SONIC&KNUCKLES");
         else
-          sprintf (items[8].text, "Lock-On: OFF");
+          sprintf (items[9].text, "Lock-On: OFF");
 
         if ((system_hw == SYSTEM_MD) || (system_hw == SYSTEM_PICO))
         {
@@ -1610,14 +1645,14 @@ static void systemmenu ()
         break;
       }
 
-      case 9:  /*** Cartridge Hot Swap ***/
+      case 10:  /*** Cartridge Hot Swap ***/
       {
         config.hot_swap ^= 1;
-        sprintf (items[9].text, "Cartridge Swap: %s", (config.hot_swap & 1) ? "ON":"OFF");
+        sprintf (items[10].text, "Cartridge Swap: %s", (config.hot_swap & 1) ? "ON":"OFF");
         break;
       }
 
-      case 10:  /*** System ROM paths ***/
+      case 11:  /*** System ROM paths ***/
       {
         GUI_DeleteMenu(m);
         rompathmenu();
@@ -1625,10 +1660,40 @@ static void systemmenu ()
         break;
       }
 
-      case 11:  /*** SVP cycles per line ***/
+      case 12:  /*** Main 68k Overclock ***/
+      {
+        GUI_OptionBox(m,0,"Main 68k Overclock Ratio",(void *)&config.m68k_overclock,0.1,1.0,7.0,0);
+        if (config.m68k_overclock > 1.0)
+          sprintf (items[12].text, "Main 68k Overclock: %1.1fx", config.m68k_overclock);
+        else
+          sprintf (items[12].text, "Main 68k Overclock: OFF");
+        break;
+      }
+
+      case 13:  /*** Sub 68k Overclock ***/
+      {
+        GUI_OptionBox(m,0,"Sub 68k Overclock Ratio",(void *)&config.s68k_overclock,0.1,1.0,4.0,0);
+        if (config.s68k_overclock > 1.0)
+          sprintf (items[13].text, "Sub 68k Overclock: %1.1fx", config.s68k_overclock);
+        else
+          sprintf (items[13].text, "Sub 68k Overclock: OFF");
+        break;
+      }
+
+      case 14:  /*** Z80 Overclock ***/
+      {
+        GUI_OptionBox(m,0,"Z80 Overclock Ratio",(void *)&config.z80_overclock,0.1,1.0,15.0,0);
+        if (config.z80_overclock > 1.0)
+          sprintf (items[14].text, "Z80 Overclock: %1.1fx", config.z80_overclock);
+        else
+          sprintf (items[14].text, "Z80 Overclock: OFF");
+        break;
+      }
+
+      case 15:  /*** SVP cycles per line ***/
       {
         GUI_OptionBox(m,0,"SVP Cycles",(void *)&SVP_cycles,1,1,1500,1);
-        sprintf (items[11].text, "SVP Cycles: %d", SVP_cycles);
+        sprintf (items[15].text, "SVP Cycles: %d", SVP_cycles);
         break;
       }
 
@@ -1697,6 +1762,11 @@ static void systemmenu ()
       }
     }
   }
+
+  /* Initialize CPU overclock ratio */
+  m68k.cycle_ratio = (100 << M68K_OVERCLOCK_SHIFT) / (int)(config.m68k_overclock * 100.0);
+  s68k.cycle_ratio = (100 << M68K_OVERCLOCK_SHIFT) / (int)(config.s68k_overclock * 100.0);
+  z80_cycle_ratio  = (100 << Z80_OVERCLOCK_SHIFT) / (int)(config.z80_overclock * 100.0);
 
   GUI_DeleteMenu(m);
 }
@@ -2025,27 +2095,27 @@ static void videomenu ()
       }
 
       case VI_OFFSET+2: /*** NTSC Sharpness ***/
-        GUI_OptionBox(m,update_bgm,"NTSC Sharpness",(void *)&config.ntsc_sharpness,0.01,-1.0,1.0,0);
+        GUI_OptionBox(m,0,"NTSC Sharpness",(void *)&config.ntsc_sharpness,0.01,-1.0,1.0,0);
         sprintf(items[VI_OFFSET+2].text, "NTSC Sharpness: %1.2f", config.ntsc_sharpness);
         break;
 
       case VI_OFFSET+3: /*** NTSC Resolution ***/
-        GUI_OptionBox(m,update_bgm,"NTSC Resolution",(void *)&config.ntsc_resolution,0.01,0.0,1.0,0);
+        GUI_OptionBox(m,0,"NTSC Resolution",(void *)&config.ntsc_resolution,0.01,0.0,1.0,0);
         sprintf(items[VI_OFFSET+3].text, "NTSC Resolution: %1.2f", config.ntsc_resolution);
         break;
 
       case VI_OFFSET+4: /*** NTSC Artifacts ***/
-        GUI_OptionBox(m,update_bgm,"NTSC Artifacts",(void *)&config.ntsc_artifacts,0.01,-1.0,0.0,0);
+        GUI_OptionBox(m,0,"NTSC Artifacts",(void *)&config.ntsc_artifacts,0.01,-1.0,0.0,0);
         sprintf(items[VI_OFFSET+4].text, "NTSC Artifacts: %1.2f", config.ntsc_artifacts);
         break;
 
       case VI_OFFSET+5: /*** NTSC Color Bleed ***/
-        GUI_OptionBox(m,update_bgm,"NTSC Color Bleed",(void *)&config.ntsc_bleed,0.01,-1.0,1.0,0);
+        GUI_OptionBox(m,0,"NTSC Color Bleed",(void *)&config.ntsc_bleed,0.01,-1.0,1.0,0);
         sprintf(items[VI_OFFSET+5].text, "NTSC Color Bleed: %1.2f", config.ntsc_bleed);
         break;
 
       case VI_OFFSET+6: /*** NTSC Color Fringing ***/
-        GUI_OptionBox(m,update_bgm,"NTSC Color Fringing",(void *)&config.ntsc_fringing,0.01,-1.0,1.0,0);
+        GUI_OptionBox(m,0,"NTSC Color Fringing",(void *)&config.ntsc_fringing,0.01,-1.0,1.0,0);
         sprintf(items[VI_OFFSET+6].text, "NTSC Color Fringing: %1.2f", config.ntsc_fringing);
         break;
 

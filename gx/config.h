@@ -3,7 +3,7 @@
  *
  *  Genesis Plus GX configuration file support
  *
- *  Copyright Eke-Eke (2007-2021)
+ *  Copyright Eke-Eke (2007-2022)
  *
  *  Redistribution and use of this code or any derivative works are permitted
  *  provided that the following conditions are met:
@@ -40,7 +40,7 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
-#define CONFIG_VERSION "GENPLUS-GX 1.7.5"
+#define CONFIG_VERSION "GENPLUS-GX 1.7.6"
 
 /****************************************************************************
  * Config Option 
@@ -83,10 +83,13 @@ typedef struct
   uint8 ntsc;
   uint8 vsync;
   uint8 render;
+  uint8 enhanced_vscroll;
+  uint8 enhanced_vscroll_limit;
   uint8 tv_mode;
   uint8 bilinear;
   uint8 vfilter;
   uint8 aspect;
+  uint8 cd_latency;
   int16 xshift;
   int16 yshift;
   int16 xscale;
@@ -100,7 +103,7 @@ typedef struct
   t_input_config input[MAX_INPUTS];
   uint16 pad_keymap[4][MAX_KEYS+1];
 #ifdef HW_RVL
-  uint32 wpad_keymap[4*3+1][MAX_KEYS];
+  uint32 wpad_keymap[4*3+1][MAX_KEYS+1];
   uint8 autosleep;
   int32 calx;
   int32 caly;
@@ -123,6 +126,9 @@ typedef struct
   float ntsc_artifacts;
   float ntsc_fringing;
   float ntsc_bleed;
+  float m68k_overclock;
+  float s68k_overclock;
+  float z80_overclock;
   char sys_rom[12][256];
 } t_config;
 

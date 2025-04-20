@@ -102,14 +102,15 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       NULL,
       "system",
       {
-         { "auto",                 "Auto"               },
-         { "sg-1000",              "SG-1000"            },
-         { "sg-1000 II",           "SG-1000 II"         },
-         { "mark-III",             "Mark III"           },
-         { "master system",        "Master System"      },
-         { "master system II",     "Master System II"   },
-         { "game gear",            "Game Gear"          },
-         { "mega drive / genesis", "Mega Drive/Genesis" },
+         { "auto",                 "Auto"                 },
+         { "sg-1000",              "SG-1000"              },
+         { "sg-1000 II",           "SG-1000 II"           },
+         { "sg-1000 II + ram ext.","SG-1000 II + RAM Ext."},
+         { "mark-III",             "Mark III"             },
+         { "master system",        "Master System"        },
+         { "master system II",     "Master System II"     },
+         { "game gear",            "Game Gear"            },
+         { "mega drive / genesis", "Mega Drive/Genesis"   },
          { NULL, NULL },
       },
       "auto"
@@ -131,6 +132,21 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "auto"
    },
    {
+      "genesis_plus_gx_vdp_mode",
+      "Force VDP Mode",
+      NULL,
+      "Overrides the VDP mode to force it to run at either NTSC 60Hz or PAL 50Hz, regardless of system region.",
+      NULL,
+      "system",
+      {
+         { "auto",  "Disabled" },
+         { "60hz",  "NTSC (60Hz)" },
+         { "50hz",  "PAL (50Hz)" },
+         { NULL, NULL },
+      },
+      "auto"
+   },
+   {
       "genesis_plus_gx_bios",
       "System Boot ROM",
       NULL,
@@ -145,7 +161,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "disabled"
    },
    {
-      "genesis_plus_gx_bram",
+      "genesis_plus_gx_system_bram",
       "CD System BRAM",
       NULL,
       "When running Sega CD content, specifies whether to share a single save file between all games from a specific region (Per-BIOS) or to create a separate save file for each game (Per-Game). Note that the Sega CD has limited internal storage, sufficient only for a handful of titles. To avoid running out of space, the 'Per-Game' setting is recommended.",
@@ -157,6 +173,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { NULL, NULL },
       },
       "per bios"
+   },
+   {
+      "genesis_plus_gx_cart_bram",
+      "CD Backup Cart BRAM",
+      NULL,
+      "When running Sega CD content, specifies whether to share a single backup ram cart for all games (Per-Cart) or to create a separate backup ram cart for each game (Per-Game).",
+      NULL,
+      "system",
+      {
+         { "per cart", "Per-Cart" },
+         { "per game", "Per-Game" },
+         { NULL, NULL },
+      },
+      "per cart"
    },
    {
       "genesis_plus_gx_add_on",
@@ -172,7 +202,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { "none",         "None" },
          { NULL, NULL },
       },
-      "disabled"
+      "auto"
    },
    {
       "genesis_plus_gx_lock_on",
@@ -782,6 +812,47 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       },
       "disabled"
    },
+   {
+      "genesis_plus_gx_enhanced_vscroll",
+      "Enhanced per-tile vertical scroll",
+      NULL,
+      "Allows each individual cell to be scrolled vertically, instead of 16px 2-cell, by averaging out with the vscroll value of the neighbouring cell. This hack only applies to few games that use 2-cell vertical scroll mode.",
+      NULL,
+      "hacks",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "genesis_plus_gx_enhanced_vscroll_limit",
+      "Enhanced per-tile vertical scroll limit",
+      NULL,
+      "Only when Enchance per-tile vertical scroll is enabled. Adjusts the limit of the vertical scroll enhancement. When the vscroll difference between neighbouring tiles is bigger than this limit, the enhancement is disabled.",
+      NULL,
+      "hacks",
+      {
+         { "2", NULL },
+         { "3",  NULL },
+         { "4", NULL },
+         { "5",  NULL },
+         { "6", NULL },
+         { "7",  NULL },
+         { "8", NULL },
+         { "9",  NULL },
+         { "10", NULL },
+         { "11",  NULL },
+         { "12", NULL },
+         { "13",  NULL },
+         { "14", NULL },
+         { "15",  NULL },
+         { "16", NULL },
+         { NULL, NULL },
+      },
+      "8"
+   },
 #ifdef HAVE_OVERCLOCK
    {
       "genesis_plus_gx_overclock",
@@ -820,6 +891,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "68K Address Error",
       NULL,
       "The Mega Drive/Genesis Main CPU (Motorola 68000) generates an Address Error exception (crash) when attempting to perform unaligned memory access. Enabling '68K Address Error' simulates this behaviour. It should only be disabled when playing ROM hacks, since these are typically developed using less accurate emulators and may rely on invalid RAM access for correct operation.",
+      NULL,
+      "hacks",
+      {
+         { "enabled",  NULL },
+         { "disabled", NULL },
+         { NULL, NULL },
+      },
+      "enabled"
+   },
+   {
+      "genesis_plus_gx_cd_latency",
+      "CD access time",
+      NULL,
+        "Simulate original CD hardware latency when initiating a read or seeking to a specific location on loaded disc. This is required by a few CD games that crash if CD data is available too soon and also fixes CD audio desync issues in some games. Disabling this can be useful with MSU-MD games as it makes CD audio tracks loops more seamless.",
       NULL,
       "hacks",
       {

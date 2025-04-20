@@ -23,6 +23,7 @@ typedef struct
   uint8 hq_psg;
   uint8 ym2612;
   uint8 ym2413;
+  uint8 cd_latency;
   int16 psg_preamp;
   int16 fm_preamp;
   int16 cdda_volume;
@@ -51,6 +52,8 @@ typedef struct
   uint8 ntsc;
   uint8 lcd;
   uint8 render;
+  uint8 enhanced_vscroll;
+  uint8 enhanced_vscroll_limit;
   t_input_config input[MAX_INPUTS];
   uint8 gcw0_fullscreen;
   uint8 gcw0_frameskip;
