@@ -168,6 +168,7 @@ static int fifo_byte_access;    /* FIFO byte access flag */
 static int *fifo_timing;        /* FIFO slots timing table */
 static int hblank_start_cycle;  /* HBLANK flag set cycle */
 static int hblank_end_cycle;    /* HBLANK flag clear cycle */
+static uint32 addr_mask;      /*** 0xffff for md, 0x1ffff for cyclone ***/
 
  /* set Z80 or 68k interrupt lines */
 static void (*set_irq_line)(unsigned int level);
