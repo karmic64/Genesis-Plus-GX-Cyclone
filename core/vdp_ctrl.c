@@ -1575,13 +1575,13 @@ static void update_md_rendering_mode(unsigned int cycles)
       {
         if (im2_flag)
         {
-          /*** probably won't bother implementing that enhanced mode here... ***/
           render_bg = (reg[11] & 0x04) ? render_bg_cyclone_im2_vs : render_bg_cyclone_im2;
           render_obj = (reg[12] & 0x08) ? render_obj_cyclone_im2_ste : render_obj_cyclone_im2;
         }
         else
         {
-          render_bg = (reg[11] & 0x04) ? (config.enhanced_vscroll ? render_bg_m5_vs_enhanced : render_bg_m5_vs) : render_bg_m5;
+          /*** probably won't bother implementing that enhanced mode here... ***/
+          render_bg = (reg[11] & 0x04) ? render_bg_cyclone_vs : render_bg_cyclone;
           render_obj = (reg[12] & 0x08) ? render_obj_cyclone_ste : render_obj_cyclone;
         }
       }
@@ -1604,7 +1604,7 @@ static void update_md_rendering_mode(unsigned int cycles)
       }
       else
       {
-        render_bg = (reg[11] & 0x04) ? render_bg_m5_vs : render_bg_m5;
+        render_bg = (reg[11] & 0x04) ? (config.enhanced_vscroll ? render_bg_m5_vs_enhanced : render_bg_m5_vs) : render_bg_m5;
         render_obj = (reg[12] & 0x08) ? render_obj_m5_ste : render_obj_m5;
       }
 
