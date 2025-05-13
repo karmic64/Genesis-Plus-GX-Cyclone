@@ -318,6 +318,10 @@ void md_cart_init(void)
 
   ******************************************************************************************************************/
   
+  cart.rom = cart.rom_base;
+  cart.cyclone_base_lo = 0;
+  cart.cyclone_base_hi = 0;
+  
   /* calculate nearest size with factor of 2 */
   unsigned int size = 0x10000;
   while (cart.romsize > size)
@@ -345,6 +349,9 @@ void md_cart_init(void)
       memset(cart.rom + cart.romsize, 0xff, MAXROMSIZE - cart.romsize);
     }
   }
+  
+  /*** double up rom for cyclone remapping ***/
+  memcpy(cart.rom + size, cart.rom, size);
 
   /* ROM is mirrored each 2^k bytes */
   cart.mask = size - 1;
@@ -894,6 +901,10 @@ int md_cart_context_save(uint8 *state)
   int i;
   int bufferptr = 0;
   uint8 *base;
+  
+  /*** cyclone mapping ***/
+  save_param(&cart.cyclone_base_lo, sizeof(cart.cyclone_base_lo));
+  save_param(&cart.cyclone_base_hi, sizeof(cart.cyclone_base_hi));
 
   /* cartridge mapping */
   for (i=0; i<0x40; i++)
@@ -943,6 +954,11 @@ int md_cart_context_load(uint8 *state)
   int i;
   int bufferptr = 0;
   uint8 offset;
+  
+  /*** cyclone mapping ***/
+  load_param(&cart.cyclone_base_lo, sizeof(cart.cyclone_base_lo));
+  load_param(&cart.cyclone_base_hi, sizeof(cart.cyclone_base_hi));
+  cart.rom = cart.rom_base + ((cart.cyclone_base_hi << 16) | cart.cyclone_base_lo);
 
   /* cartridge mapping */
   for (i=0; i<0x40; i++)
@@ -999,6 +1015,35 @@ int md_cart_context_load(uint8 *state)
 
   return bufferptr;
 }
+
+
+/*** cyclone mapping functions ***/
+
+void md_cart_cyclone_remap(int diff) {
+	int i;
+	
+	if (diff) {
+		for (i=0; i<0x40; i++) {
+			if ((m68k.memory_map[i].base - cart.rom_base) < (cart.mask+1)*2) {
+				m68k.memory_map[i].base += diff;
+			}
+		}
+	}
+}
+
+void md_cart_cyclone_remap_lo(uint16 lo) {
+	int diff = lo - cart.cyclone_base_lo;
+	cart.cyclone_base_lo = lo;
+	md_cart_cyclone_remap(diff);
+}
+
+void md_cart_cyclone_remap_hi(uint16 hi) {
+	hi &= cart.mask >> 16;
+	int diff = (hi - cart.cyclone_base_hi) << 16;
+	cart.cyclone_base_hi = hi;
+	md_cart_cyclone_remap(diff);
+}
+
 
 /************************************************************
           MAPPER handlers 

@@ -1608,3 +1608,25 @@ unsigned int pico_read_word(unsigned int address)
 {
   return (pico_read_byte(address | 1) | (pico_read_byte(address) << 8));
 }
+
+
+
+/***
+extra cyclone registers ($B0xxxx)
+***/
+
+unsigned int cyclone_read_byte(unsigned int address) { return 0; }
+unsigned int cyclone_read_word(unsigned int address) { return 0; }
+
+void cyclone_write_byte(unsigned int address, unsigned int data) { }
+
+void cyclone_write_word(unsigned int address, unsigned int data) {
+	switch (address) {
+		case 0xb01028:
+			md_cart_cyclone_remap_lo(data);
+			break;
+		case 0xb0102a:
+			md_cart_cyclone_remap_hi(data);
+			break;
+	}
+}

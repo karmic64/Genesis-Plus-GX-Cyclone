@@ -74,4 +74,10 @@ extern void vdp_write_word(unsigned int address, unsigned int data);
 extern unsigned int pico_read_byte(unsigned int address);
 extern unsigned int pico_read_word(unsigned int address);
 
+/*** cyclone registers ***/
+extern unsigned int cyclone_read_byte(unsigned int address);
+extern unsigned int cyclone_read_word(unsigned int address);
+extern void cyclone_write_byte(unsigned int address, unsigned int data);
+extern void cyclone_write_word(unsigned int address, unsigned int data);
+
 #endif /* _MEM68K_H_ */

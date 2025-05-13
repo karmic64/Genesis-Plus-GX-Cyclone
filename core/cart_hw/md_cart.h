@@ -89,7 +89,10 @@ typedef struct
   uint8 special;          /* custom external hardware (Lock-On, J-Cart, 3-D glasses, Terebi Oekaki,...) */
   cart_hw_t hw;           /* cartridge internal hardware */
   uint8 lockrom[0x10000]; /* Game Genie / (Pro) Action Replay Lock-On ROM area (max 64KB) */
-  uint8 rom[MAXROMSIZE];  /* cartridge ROM area */
+  uint8 rom_base[MAXROMSIZE * 2];  /* cartridge ROM area */ /*** doubled up for cyclone remapping ***/
+  uint8 *rom;	/*** rom_base + cyclone offset ***/
+  uint16 cyclone_base_lo;
+  uint16 cyclone_base_hi;
 } md_cart_t;
 
 /* Function prototypes */
@@ -97,5 +100,8 @@ extern void md_cart_init(void);
 extern void md_cart_reset(int hard_reset);
 extern int md_cart_context_save(uint8 *state);
 extern int md_cart_context_load(uint8 *state);
+
+extern void md_cart_cyclone_remap_lo(uint16 lo);
+extern void md_cart_cyclone_remap_hi(uint16 hi);
 
 #endif

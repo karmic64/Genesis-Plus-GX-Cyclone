@@ -168,6 +168,12 @@ void gen_init(void)
     }
     else
     {
+    	/*** cyclone registers ***/
+    	m68k.memory_map[0xb0].read8 = cyclone_read_byte;
+    	m68k.memory_map[0xb0].read16 = cyclone_read_word;
+    	m68k.memory_map[0xb0].write8 = cyclone_write_byte;
+    	m68k.memory_map[0xb0].write16 = cyclone_write_word;
+    	
       /* Cartridge hardware */
       md_cart_init();
     }

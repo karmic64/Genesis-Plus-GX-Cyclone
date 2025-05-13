@@ -553,6 +553,8 @@ int load_bios(int system)
 int load_rom(char *filename)
 {
   int i, size;
+  
+  cart.rom = cart.rom_base;
 
 #ifdef USE_DYNAMIC_ALLOC
   if (!ext)
